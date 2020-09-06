@@ -111,6 +111,7 @@ pub async fn connect(peer: web_sys::RtcPeerConnection) -> Result<Connection, JsV
     let on_open_callback = {
         let connected = Rc::clone(&connected);
         let on_open_callback = Closure::wrap(Box::new(move |_: JsValue| {
+            log::debug!("channel open");
             connected.set(true);
         }) as Box<dyn FnMut(JsValue)>);
         data_channel.set_onopen(Some(on_open_callback.as_ref().unchecked_ref()));

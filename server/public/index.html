@@ -22,12 +22,18 @@
             for (let i = 0; i < 25; i++) {
               channel.send_num(i);
             }
+            setTimeout(() => {
+                channel.send_num(100);
+            }, 500);
 
             setInterval(() => {
-                let v = channel.recv();
-                console.log(v);
-                if (v) {
-                    console.log(v);
+                while (true) {
+                    let v = channel.recv();
+                    if (v) {
+                        console.log(v);
+                    } else {
+                        break;
+                    }
                 }
             }, 100);
         }
