@@ -26,6 +26,7 @@ pub struct Connection {
     on_message_callback: Closure<dyn FnMut(web_sys::MessageEvent)>,
     on_ice_candidate_callback: Closure<dyn FnMut(web_sys::RtcPeerConnectionIceEvent)>,
     recv_buffer: Rc<RefCell<RecvBuffer>>,
+    wakers: Rc<RefCell<Vec<std::rc::Weak<RefCell<Option<std::task::Waker>>>>>>,
 }
 
 #[wasm_bindgen]
@@ -39,14 +40,27 @@ impl Connection {
             peer.create_data_channel_with_data_channel_dict("webudp", &data_channel_config)
         };
 
+        let wakers: Rc<RefCell<Vec<std::rc::Weak<RefCell<Option<std::task::Waker>>>>>> =
+            Default::default();
         let recv_buffer = Rc::new(RefCell::new(RecvBuffer::new()));
         let on_message_callback = {
+            let wakers = Rc::clone(&wakers);
             let recv_buffer = Rc::clone(&recv_buffer);
             let on_message_callback = Closure::wrap(Box::new(move |ev: web_sys::MessageEvent| {
                 let data = js_sys::Uint8Array::new(&ev.data());
                 recv_buffer
                     .borrow_mut()
                     .push_back(data.to_vec().into_boxed_slice());
+                let mut wakers = wakers.borrow_mut();
+                wakers.retain(|waker| match waker.upgrade() {
+                    None => false,
+                    Some(waker) => {
+                        if let Some(waker) = waker.borrow_mut().take() {
+                            waker.wake();
+                        }
+                        true
+                    }
+                });
             })
                 as Box<dyn FnMut(web_sys::MessageEvent)>);
             data_channel.add_event_listener_with_callback(
@@ -90,7 +104,8 @@ impl Connection {
             {
                 let on_error_callback = Closure::wrap(Box::new(move |error: JsValue| {
                     reject.call1(&JsValue::undefined(), &error).unwrap_throw();
-                }) as Box<dyn FnMut(JsValue)>);
+                })
+                    as Box<dyn FnMut(JsValue)>);
                 data_channel.set_onerror(Some(on_error_callback.as_ref().unchecked_ref()));
                 on_error_callback.forget();
             }
@@ -127,7 +142,8 @@ impl Connection {
             let answer_sdp = js_sys::Reflect::get(&answer, &JsValue::from_str("sdp"))?
                 .as_string()
                 .unwrap();
-            let mut answer_obj = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Answer);
+            let mut answer_obj =
+                web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Answer);
             answer_obj.sdp(&answer_sdp);
             wasm_bindgen_futures::JsFuture::from(peer.set_remote_description(&answer_obj)).await?;
 
@@ -137,7 +153,7 @@ impl Connection {
             match wasm_bindgen_futures::JsFuture::from(
                 peer.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&candidate)),
             )
-                .await
+            .await
             {
                 Ok(_) => log::debug!("add ice candidate success"),
                 Err(_) => log::error!("add ice candidate failure"),
@@ -154,6 +170,7 @@ impl Connection {
             on_message_callback,
             on_ice_candidate_callback,
             recv_buffer,
+            wakers,
         })
     }
 
@@ -176,6 +193,16 @@ impl Connection {
     pub fn recv(&mut self) -> Option<Box<[u8]>> {
         self.recv_buffer.borrow_mut().pop_front()
     }
+
+    #[wasm_bindgen]
+    pub fn recv_fut(&mut self) -> RecvFuture {
+        let waker: Rc<RefCell<Option<std::task::Waker>>> = Default::default();
+        self.wakers.borrow_mut().push(Rc::downgrade(&waker));
+        RecvFuture {
+            recv_buffer: Rc::clone(&self.recv_buffer),
+            waker,
+        }
+    }
 }
 
 impl Drop for Connection {
@@ -195,5 +222,42 @@ impl Drop for Connection {
                 self.on_ice_candidate_callback.as_ref().unchecked_ref(),
             )
             .expect("failed to remove icecandidate event listener");
+    }
+}
+
+#[wasm_bindgen]
+#[must_use = "futures do nothing unless you `.await` or poll them"]
+pub struct RecvFuture {
+    recv_buffer: Rc<RefCell<RecvBuffer>>,
+    waker: Rc<RefCell<Option<std::task::Waker>>>,
+}
+
+#[wasm_bindgen]
+impl RecvFuture {
+    #[wasm_bindgen(js_name = await)]
+    pub async fn run(self) -> js_sys::Uint8Array {
+        (*self.await).into()
+    }
+}
+
+impl std::future::Future for RecvFuture {
+    type Output = Box<[u8]>;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context,
+    ) -> std::task::Poll<Self::Output> {
+        let p = match self.recv_buffer.try_borrow_mut() {
+            Ok(mut recv_buffer) => match recv_buffer.pop_front() {
+                None => std::task::Poll::Pending,
+                Some(frame) => std::task::Poll::Ready(frame),
+            },
+            Err(_) => std::task::Poll::Pending,
+        };
+        if p == std::task::Poll::Pending {
+            let waker = cx.waker().clone();
+            *self.waker.borrow_mut() = Some(waker);
+        }
+        p
     }
 }

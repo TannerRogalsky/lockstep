@@ -32,16 +32,21 @@
             };
             loop();
 
-            setInterval(() => {
-                while (true) {
-                    let v = channel.recv();
-                    if (v) {
-                        console.log(v);
-                    } else {
-                        break;
-                    }
-                }
-            }, 100);
+            let p1 = channel.recv_fut().await();
+            let p2 = channel.recv_fut().await();
+            console.log(await p2);
+            console.log(await p1);
+
+            // setInterval(() => {
+            //     while (true) {
+            //         let v = channel.recv();
+            //         if (v) {
+            //             console.log(v);
+            //         } else {
+            //             break;
+            //         }
+            //     }
+            // }, 100);
         }
 
         run();
