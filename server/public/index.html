@@ -8,7 +8,7 @@
         let SEND_INTERVAL = 1;
         let ADDRESS = "/new_rtc_session";
 
-        import init, {connect} from "./pkg/client.js";
+        import init, {Connection} from "./pkg/client.js";
 
         async function run() {
             await init();
@@ -18,13 +18,19 @@
                     urls: ["stun:stun.l.google.com:19302"]
                 }]
             });
-            let channel = await connect(peer);
-            for (let i = 0; i < 25; i++) {
-              channel.send_num(i);
-            }
-            setTimeout(() => {
-                channel.send_num(100);
-            }, 500);
+            let channel = await Connection.connect(peer);
+            console.log(peer.sctp);
+
+            let i = 0;
+            let loop = () => {
+                channel.send_num(i);
+                i++;
+                if (i > 1) {
+                    return;
+                }
+                requestAnimationFrame(loop);
+            };
+            loop();
 
             setInterval(() => {
                 while (true) {
