@@ -39,4 +39,5 @@ features = [
     "Request",
     "Response",
     "Window",
+    "RtcDataChannelState",
 ]

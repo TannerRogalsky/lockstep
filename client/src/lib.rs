@@ -1,10 +1,7 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-};
+use std::{cell::RefCell, rc::Rc};
 
 #[wasm_bindgen(start)]
 pub fn main() {
@@ -17,11 +14,7 @@ pub struct Connection {
     peer: web_sys::RtcPeerConnection,
     data_channel: web_sys::RtcDataChannel,
     on_message_callback: Closure<dyn FnMut(web_sys::MessageEvent)>,
-    on_open_callback: Closure<dyn FnMut(JsValue)>,
     on_ice_candidate_callback: Closure<dyn FnMut(web_sys::RtcPeerConnectionIceEvent)>,
-
-    connected: Rc<Cell<bool>>,
-    send_buffer: Vec<Vec<u8>>,
     recv_buffer: Rc<RefCell<std::collections::VecDeque<Vec<u8>>>>,
 }
 
@@ -39,15 +32,7 @@ impl Connection {
 
     #[wasm_bindgen]
     pub fn send(&mut self, data: &[u8]) -> Result<(), JsValue> {
-        if self.connected.get() {
-            for frame in self.send_buffer.drain(..) {
-                self.data_channel.send_with_u8_array(&frame)?;
-            }
-            self.data_channel.send_with_u8_array(data)
-        } else {
-            self.send_buffer.push(data.to_vec());
-            Ok(())
-        }
+        self.data_channel.send_with_u8_array(data)
     }
 
     #[wasm_bindgen]
@@ -69,12 +54,6 @@ impl Drop for Connection {
                 self.on_message_callback.as_ref().unchecked_ref(),
             )
             .expect("failed to remove message event listener");
-        self.data_channel
-            .remove_event_listener_with_callback(
-                "open",
-                self.on_open_callback.as_ref().unchecked_ref(),
-            )
-            .expect("failed to remove open event listener");
 
         self.peer
             .remove_event_listener_with_callback(
@@ -95,7 +74,6 @@ pub async fn connect(peer: web_sys::RtcPeerConnection) -> Result<Connection, JsV
     };
 
     let recv_buffer = Rc::new(RefCell::new(std::collections::VecDeque::new()));
-
     let on_message_callback = {
         let recv_buffer = Rc::clone(&recv_buffer);
         let on_message_callback = Closure::wrap(Box::new(move |ev: web_sys::MessageEvent| {
@@ -105,17 +83,6 @@ pub async fn connect(peer: web_sys::RtcPeerConnection) -> Result<Connection, JsV
             as Box<dyn FnMut(web_sys::MessageEvent)>);
         data_channel.set_onmessage(Some(on_message_callback.as_ref().unchecked_ref()));
         on_message_callback
-    };
-
-    let connected = Rc::new(Cell::new(false));
-    let on_open_callback = {
-        let connected = Rc::clone(&connected);
-        let on_open_callback = Closure::wrap(Box::new(move |_: JsValue| {
-            log::debug!("channel open");
-            connected.set(true);
-        }) as Box<dyn FnMut(JsValue)>);
-        data_channel.set_onopen(Some(on_open_callback.as_ref().unchecked_ref()));
-        on_open_callback
     };
 
     let on_ice_candidate_callback = {
@@ -130,6 +97,30 @@ pub async fn connect(peer: web_sys::RtcPeerConnection) -> Result<Connection, JsV
         peer.set_onicecandidate(Some(on_ice_candidate_callback.as_ref().unchecked_ref()));
         on_ice_candidate_callback
     };
+
+    let data_channel = Rc::new(data_channel);
+    let promise = js_sys::Promise::new(&mut move |resolve, reject| {
+        {
+            let on_open_callback = Closure::wrap(Box::new({
+                let data_channel = Rc::clone(&data_channel);
+                move |_: JsValue| {
+                    resolve
+                        .call1(&JsValue::undefined(), &data_channel)
+                        .unwrap_throw();
+                }
+            }) as Box<dyn FnMut(JsValue)>);
+            data_channel.set_onopen(Some(on_open_callback.as_ref().unchecked_ref()));
+            on_open_callback.forget();
+        }
+
+        {
+            let on_error_callback = Closure::wrap(Box::new(move |error: JsValue| {
+                reject.call1(&JsValue::undefined(), &error).unwrap_throw();
+            }) as Box<dyn FnMut(JsValue)>);
+            data_channel.set_onerror(Some(on_error_callback.as_ref().unchecked_ref()));
+            on_error_callback.forget();
+        }
+    });
 
     {
         let offer = wasm_bindgen_futures::JsFuture::from(peer.create_offer()).await?;
@@ -179,14 +170,15 @@ pub async fn connect(peer: web_sys::RtcPeerConnection) -> Result<Connection, JsV
         }
     }
 
+    let data_channel: web_sys::RtcDataChannel = wasm_bindgen_futures::JsFuture::from(promise)
+        .await?
+        .dyn_into()?;
+
     Ok(Connection {
         peer,
         data_channel,
         on_message_callback,
-        on_open_callback,
         on_ice_candidate_callback,
-        connected,
-        send_buffer: Vec::new(),
         recv_buffer,
     })
 }
