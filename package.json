@@ -1,0 +1,8 @@
+{
+  "name": "lockstep",
+  "version": "0.1.0",
+  "cacheDirectories": ["www/node_modules"],
+  "scripts": {
+    "postinstall": "cd www && npm install && npm build"
+  }
+}
