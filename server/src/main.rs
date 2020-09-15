@@ -1,5 +1,3 @@
-use bincode::ErrorKind;
-use warp::Reply;
 use webrtc_unreliable::{Server as RtcServer, SessionEndpoint};
 
 #[derive(Debug)]
@@ -14,7 +12,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         let localhost = [127, 0, 0, 1];
         AppConfig {
-            http: (localhost, 8080).into(),
+            http: (localhost, 3030).into(),
             webrtc_data: (localhost, 42424).into(),
             webrtc_public: (localhost, 42424).into(),
             udp: (localhost, 43434).into(),
@@ -150,7 +148,7 @@ async fn main() {
                     frame_index: state.current.frame_index,
                     state: &state.current.physics_state,
                 };
-                bincode::serialize(&output).unwrap().into_response()
+                warp::Reply::into_response(bincode::serialize(&output).unwrap())
             });
             warp::serve(public.or(rtc).or(state_get))
                 .run(config.http)
