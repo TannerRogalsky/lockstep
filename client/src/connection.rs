@@ -3,8 +3,6 @@ use wasm_bindgen::JsCast;
 
 use std::{cell::RefCell, rc::Rc};
 
-type RecvBuffer = std::collections::VecDeque<Box<[u8]>>;
-
 enum Callback {
     OnMessage,
     OnIceCandidate,
@@ -25,8 +23,8 @@ pub struct Connection {
     data_channel: web_sys::RtcDataChannel,
     on_message_callback: Closure<dyn FnMut(web_sys::MessageEvent)>,
     on_ice_candidate_callback: Closure<dyn FnMut(web_sys::RtcPeerConnectionIceEvent)>,
-    recv_buffer: Rc<RefCell<RecvBuffer>>,
     wakers: Rc<RefCell<Vec<std::rc::Weak<RefCell<Option<std::task::Waker>>>>>>,
+    receiver: crossbeam_channel::Receiver<Box<[u8]>>,
 }
 
 #[wasm_bindgen]
@@ -42,15 +40,12 @@ impl Connection {
 
         let wakers: Rc<RefCell<Vec<std::rc::Weak<RefCell<Option<std::task::Waker>>>>>> =
             Default::default();
-        let recv_buffer = Rc::new(RefCell::new(RecvBuffer::new()));
+        let (sender, receiver) = crossbeam_channel::unbounded();
         let on_message_callback = {
             let wakers = Rc::clone(&wakers);
-            let recv_buffer = Rc::clone(&recv_buffer);
             let on_message_callback = Closure::wrap(Box::new(move |ev: web_sys::MessageEvent| {
                 let data = js_sys::Uint8Array::new(&ev.data());
-                recv_buffer
-                    .borrow_mut()
-                    .push_back(data.to_vec().into_boxed_slice());
+                let _r = sender.send(data.to_vec().into_boxed_slice());
                 let mut wakers = wakers.borrow_mut();
                 wakers.retain(|waker| match waker.upgrade() {
                     None => false,
@@ -169,7 +164,7 @@ impl Connection {
             data_channel,
             on_message_callback,
             on_ice_candidate_callback,
-            recv_buffer,
+            receiver,
             wakers,
         })
     }
@@ -191,7 +186,7 @@ impl Connection {
 
     #[wasm_bindgen]
     pub fn recv(&mut self) -> Option<Box<[u8]>> {
-        self.recv_buffer.borrow_mut().pop_front()
+        self.receiver.try_recv().ok()
     }
 
     #[wasm_bindgen]
@@ -199,7 +194,7 @@ impl Connection {
         let waker: Rc<RefCell<Option<std::task::Waker>>> = Default::default();
         self.wakers.borrow_mut().push(Rc::downgrade(&waker));
         RecvFuture {
-            recv_buffer: Rc::clone(&self.recv_buffer),
+            receiver: self.receiver.clone(),
             waker,
         }
     }
@@ -228,7 +223,7 @@ impl Drop for Connection {
 #[wasm_bindgen]
 #[must_use = "futures do nothing unless you `.await` or poll them"]
 pub struct RecvFuture {
-    recv_buffer: Rc<RefCell<RecvBuffer>>,
+    receiver: crossbeam_channel::Receiver<Box<[u8]>>,
     waker: Rc<RefCell<Option<std::task::Waker>>>,
 }
 
@@ -247,17 +242,13 @@ impl std::future::Future for RecvFuture {
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context,
     ) -> std::task::Poll<Self::Output> {
-        let p = match self.recv_buffer.try_borrow_mut() {
-            Ok(mut recv_buffer) => match recv_buffer.pop_front() {
-                None => std::task::Poll::Pending,
-                Some(frame) => std::task::Poll::Ready(frame),
-            },
-            Err(_) => std::task::Poll::Pending,
-        };
-        if p == std::task::Poll::Pending {
-            let waker = cx.waker().clone();
-            *self.waker.borrow_mut() = Some(waker);
+        match self.receiver.try_recv() {
+            Ok(frame) => return std::task::Poll::Ready(frame),
+            Err(_err) => {
+                let waker = cx.waker().clone();
+                *self.waker.borrow_mut() = Some(waker);
+                std::task::Poll::Pending
+            }
         }
-        p
     }
 }
