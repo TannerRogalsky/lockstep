@@ -8,7 +8,7 @@
         let SEND_INTERVAL = 1;
         let ADDRESS = "/new_rtc_session";
 
-        import init, {Connection} from "./pkg/client.js";
+        import init, {Connection, State, InputState} from "./pkg/client.js";
 
         async function run() {
             await init();
@@ -21,36 +21,86 @@
             let channel = await Connection.connect(peer);
             console.log(peer.sctp);
 
-            let i = 0;
-            let loop = () => {
-                channel.send_num(i);
-                i++;
-                if (i > 1) {
-                    return;
+            let physics_state = await fetch("state").then((r) => r.arrayBuffer()).then((e) => new Uint8Array(e));
+            let state = State.with_physics_raw(physics_state, channel);
+
+            // let i = 0;
+            // let channelLoop = () => {
+            //     channel.send_num(i);
+            //     i++;
+            //     if (i > 1) {
+            //         return;
+            //     }
+            //     requestAnimationFrame(channelLoop);
+            // };
+            // channelLoop();
+
+            // let p1 = channel.recv_fut().await();
+            // let p2 = channel.recv_fut().await();
+            // console.log(await p2);
+            // console.log(await p1);
+
+            let canvas = document.getElementById("canvas");
+            let ctx = canvas.getContext("2d");
+
+
+            canvas.addEventListener("mousedown", (event) => {
+                state.input_state_changed(new InputState(2 * (Math.random() - 0.5), 5, true));
+            });
+
+            canvas.addEventListener("mouseup", (event) => {
+                state.input_state_changed(new InputState(0, 0, false));
+            });
+
+            let scale = 10;
+            const [wx, wy] = [0.5 * -scale, 0.5 * scale];
+            const [ww, wh] = [10, -10];
+            let prev_t = performance.now();
+            let loop = (t) => {
+                state.step();
+                let json = state.to_json();
+
+                ctx.scale(canvas.width / scale, -canvas.height / scale);
+                ctx.translate(-wx, -wy);
+
+                ctx.clearRect(wx, wy, ww, wh);
+                ctx.fillStyle = "red";
+                ctx.fillRect(wx, wy, ww, wh);
+                for (const maybeItem of json.colliders.items) {
+                    if (maybeItem.Occupied) {
+                        const item = maybeItem.Occupied.value;
+                        const [x, y] = item.position.translation;
+
+                        ctx.fillStyle = 'blue';
+                        ctx.beginPath();
+
+                        if (item.shape.Cuboid) {
+                            let [w, h] = item.shape.Cuboid.half_extents;
+                            ctx.rect(x - w, y - h, w * 2, h * 2);
+                        } else if (item.shape.Ball) {
+                            let radius = item.shape.Ball.radius;
+                            ctx.ellipse(x, y, radius, radius, 0, 0, 2 * Math.PI);
+                        }
+                        ctx.fill();
+                    }
                 }
+
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.font = '24px serif';
+                ctx.fillStyle = "green";
+                ctx.fillText(`latency (secs): ${state.latency_secs()}`, 0, 24);
+                ctx.fillText(`fps (secs): ${(t - prev_t) / 1000}`, 0, 24 * 2);
+                prev_t = t;
+
                 requestAnimationFrame(loop);
             };
             loop();
-
-            let p1 = channel.recv_fut().await();
-            let p2 = channel.recv_fut().await();
-            console.log(await p2);
-            console.log(await p1);
-
-            // setInterval(() => {
-            //     while (true) {
-            //         let v = channel.recv();
-            //         if (v) {
-            //             console.log(v);
-            //         } else {
-            //             break;
-            //         }
-            //     }
-            // }, 100);
         }
 
         run();
     </script>
 </head>
-<body></body>
+<body>
+    <canvas id="canvas" width="480px" height="480px" style="border-style: solid"></canvas>
+</body>
 </html>
