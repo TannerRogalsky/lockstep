@@ -32,7 +32,7 @@ impl AppConfig {
             http: (binding, port).into(),
             webrtc_data: (binding, port).into(),
             webrtc_public: (binding, port).into(),
-            udp: (binding, port).into(),
+            udp: (binding, port + 1).into(),
         })
     }
 }
