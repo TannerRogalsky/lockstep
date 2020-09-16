@@ -10,10 +10,5 @@ module.exports = merge(common, {
         filename: 'bootstrap.js',
     },
     mode: 'production',
-    plugins: [
-        new WasmPackPlugin({
-            crateDirectory: path.resolve(__dirname, '..', 'client'),
-            outDir: path.resolve(__dirname, '..', 'pkg'),
-        }),
-    ],
+    plugins: [],
 });
