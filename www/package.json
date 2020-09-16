@@ -26,7 +26,7 @@
     "url": "https://github.com/rustwasm/create-wasm-app/issues"
   },
   "homepage": "https://github.com/rustwasm/create-wasm-app#readme",
-  "devDependencies": {
+  "dependencies": {
     "client": "file:../pkg",
     "copy-webpack-plugin": "^5.0.0",
     "eslint": "^7.9.0",
