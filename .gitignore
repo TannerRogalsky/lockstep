@@ -2,4 +2,5 @@
 Cargo.lock
 /client/pkg
 /.idea
+/pkg
 /server/public
