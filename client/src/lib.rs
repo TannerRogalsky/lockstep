@@ -15,6 +15,7 @@ pub struct State {
     input_state: shared::InputState,
     connection: Connection,
     latency_buffer: LatencyBuffer,
+    hashes: Vec<(shared::FrameIndex, u64)>,
 }
 
 #[wasm_bindgen]
@@ -39,6 +40,7 @@ impl State {
             input_state: Default::default(),
             connection,
             latency_buffer: Default::default(),
+            hashes: Default::default(),
         }
     }
 
@@ -54,7 +56,24 @@ impl State {
                     shared::Recv::Pong(frame_index) => {
                         self.latency_buffer.recv(frame_index);
                     }
-                    shared::Recv::StateHash(_) => unimplemented!(),
+                    shared::Recv::StateHash(shared::IndexedState {
+                        frame_index,
+                        state: hash,
+                    }) => {
+                        for (other_frame_index, other_hash) in self.hashes.iter() {
+                            if other_frame_index == &frame_index {
+                                if other_hash != &hash {
+                                    log::error!(
+                                        "Hash mismatch for frame {}. Expected {} but found {}",
+                                        frame_index,
+                                        hash,
+                                        other_hash
+                                    );
+                                }
+                                break;
+                            }
+                        }
+                    }
                     shared::Recv::FullState(_) => unimplemented!(),
                 }
             }
@@ -69,6 +88,13 @@ impl State {
             Ok(state) => self.connection.send(&state),
             Err(err) => Err(JsValue::from_str(&err.to_string())),
         };
+        {
+            let buf = bincode::serialize(&self.inner.physics_state).unwrap();
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            std::hash::Hash::hash(&buf, &mut hasher);
+            let hash = std::hash::Hasher::finish(&hasher);
+            self.hashes.push((self.inner.frame_index, hash));
+        }
         self.inner.step(self.input_state);
         r
     }

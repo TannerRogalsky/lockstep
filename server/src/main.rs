@@ -5,7 +5,6 @@ struct AppConfig {
     http: std::net::SocketAddr,
     webrtc_data: std::net::SocketAddr,
     webrtc_public: std::net::SocketAddr,
-    udp: std::net::SocketAddr,
 }
 
 impl Default for AppConfig {
@@ -15,7 +14,6 @@ impl Default for AppConfig {
             http: (localhost, 3030).into(),
             webrtc_data: (localhost, 3030).into(),
             webrtc_public: (localhost, 3030).into(),
-            udp: (localhost, 43434).into(),
         }
     }
 }
@@ -32,7 +30,6 @@ impl AppConfig {
             http: (binding, port).into(),
             webrtc_data: (binding, port).into(),
             webrtc_public: (binding, port).into(),
-            udp: (binding, port + 1).into(),
         })
     }
 }
@@ -72,44 +69,33 @@ async fn main() {
     let config = AppConfig::try_from_env().unwrap_or_default();
     log::info!("config: {:#?}", config);
 
+    let (mut sx, mut rx) = tokio::sync::mpsc::channel(100);
     let mut rtc_server = RtcServer::new(config.webrtc_data, config.webrtc_public)
         .await
         .expect("could not start RTC server");
 
-    let udp_server = tokio::net::UdpSocket::bind(&config.udp)
-        .await
-        .expect("couldn't bind udp socket");
-
-    tokio::spawn(async move {
-        let mut socket = udp_server;
-        let mut buf = vec![0; 1024];
-        let mut to_send = None;
-
-        loop {
-            // First we check to see if there's a message we need to echo back.
-            // If so then we try to send it back to the original source, waiting
-            // until it's writable and we're able to do so.
-            if let Some((size, peer)) = to_send {
-                let amt = socket.send_to(&buf[..size], &peer).await.unwrap();
-
-                log::debug!("Echoed {}/{} bytes to {}", amt, size, peer);
-            }
-
-            // If we're here then `to_send` is `None`, so we take a look for the
-            // next message we're going to echo back.
-            to_send = Some(socket.recv_from(&mut buf).await.unwrap());
-        }
-    });
-
     let state = std::sync::Arc::new(std::sync::Mutex::new(AppState::with_capacity(60)));
-    std::thread::spawn({
+    tokio::spawn({
         let state = std::sync::Arc::clone(&state);
-        let dur = std::time::Duration::from_secs_f64(0.01666666666);
-        move || loop {
-            if let Ok(mut state) = state.lock() {
-                state.step();
-                drop(state);
-                std::thread::sleep(dur);
+        let dur = std::time::Duration::from_secs_f64(1. / 60.);
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        async move {
+            loop {
+                let r = if let Ok(mut state) = state.lock() {
+                    state.step();
+                    let last = state.snapshots.back().unwrap();
+                    std::hash::Hash::hash(&last.state, &mut hasher);
+                    let hash = std::hash::Hasher::finish(&hasher);
+                    Some((last.frame_index, hash))
+                } else {
+                    None
+                };
+                if let Some((frame_index, hash)) = r {
+                    if let Err(err) = sx.send((frame_index, hash)).await {
+                        log::error!("{}", err);
+                    }
+                    tokio::time::delay_for(dur).await;
+                }
             }
         }
     });
@@ -173,21 +159,37 @@ async fn main() {
         }
     });
 
-    let mut message_buf = Vec::new();
-    loop {
-        let received = match rtc_server.recv().await {
-            Ok(received) => {
-                message_buf.clear();
-                message_buf.extend(received.message.as_ref());
-                Some((received.message_type, received.remote_addr))
+    async fn on_internal_message(
+        rtc_server: &mut RtcServer,
+        (frame_index, hash): (shared::FrameIndex, u64),
+    ) {
+        let msg = shared::Recv::StateHash(shared::IndexedState {
+            frame_index,
+            state: hash,
+        });
+        let msg = bincode::serialize(&msg).unwrap();
+        let connected_clients = rtc_server.connected_clients().copied().collect::<Vec<_>>();
+        for connected_client in connected_clients {
+            if let Err(err) = rtc_server
+                .send(
+                    &msg,
+                    webrtc_unreliable::MessageType::Binary,
+                    &connected_client,
+                )
+                .await
+            {
+                log::error!("{}", err);
             }
-            Err(err) => {
-                log::warn!("could not receive RTC message: {}", err);
-                None
-            }
-        };
+        }
+    }
 
-        if let Some((message_type, remote_addr)) = received {
+    async fn on_external_message(
+        rtc_server: &mut RtcServer,
+        message_buf: &mut Vec<u8>,
+        state: &std::sync::Arc<std::sync::Mutex<AppState>>,
+        message: Option<(webrtc_unreliable::MessageType, std::net::SocketAddr)>,
+    ) {
+        if let Some((message_type, remote_addr)) = message {
             let response = match bincode::deserialize::<shared::Send>(&message_buf) {
                 Err(err) => {
                     log::error!("{}", err);
@@ -209,6 +211,35 @@ async fn main() {
                     Ok(_) => log::trace!("send buf success to {}: {:?}", remote_addr, message_buf),
                     Err(err) => log::warn!("could not send message to {}: {}", remote_addr, err),
                 }
+            }
+        }
+    }
+
+    async fn try_external(
+        rtc_server: &mut RtcServer,
+        message_buf: &mut Vec<u8>,
+    ) -> Option<(webrtc_unreliable::MessageType, std::net::SocketAddr)> {
+        match rtc_server.recv().await {
+            Ok(received) => {
+                message_buf.clear();
+                message_buf.extend(received.message.as_ref());
+                Some((received.message_type, received.remote_addr))
+            }
+            Err(err) => {
+                log::warn!("could not receive RTC message: {}", err);
+                None
+            }
+        }
+    }
+
+    let mut message_buf = Vec::new();
+    loop {
+        tokio::select! {
+            message = rx.recv() => {
+                on_internal_message(&mut rtc_server, message.unwrap()).await;
+            },
+            message = try_external(&mut rtc_server, &mut message_buf) => {
+                on_external_message(&mut rtc_server, &mut message_buf, &state, message).await;
             }
         }
     }

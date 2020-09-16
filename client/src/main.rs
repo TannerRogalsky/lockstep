@@ -1,7 +1,11 @@
 use std::net::UdpSocket;
 
+/// webrtc-unreliable is using a raw UDP socket under the hood
+/// but because of the way that it does client tracking it won't work seamlessly without
+/// an sdp
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let remote_addr = std::net::SocketAddr::new([127, 0, 0, 1].into(), 43434);
+    let remote_addr = std::net::SocketAddr::new([127, 0, 0, 1].into(), 3031);
     let local_addr = if remote_addr.is_ipv4() {
         "0.0.0.0:0"
     } else {
@@ -15,6 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let input = format!("hello from udp {}", count);
         let size = socket.send(input.as_bytes())?;
+        println!("sent {} bytes", size);
         assert_eq!(size, input.len());
         let mut data = vec![0u8; MAX_DATAGRAM_SIZE];
         let len = socket.recv(&mut data)?;
