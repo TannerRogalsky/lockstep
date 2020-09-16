@@ -13,10 +13,27 @@ impl Default for AppConfig {
         let localhost = [127, 0, 0, 1];
         AppConfig {
             http: (localhost, 3030).into(),
-            webrtc_data: (localhost, 42424).into(),
-            webrtc_public: (localhost, 42424).into(),
+            webrtc_data: (localhost, 3030).into(),
+            webrtc_public: (localhost, 3030).into(),
             udp: (localhost, 43434).into(),
         }
+    }
+}
+
+impl AppConfig {
+    pub fn try_from_env() -> Option<Self> {
+        let port = match std::env::var("PORT").map(|s| s.parse::<u16>()) {
+            Ok(Ok(port)) => port,
+            _ => return None,
+        };
+
+        let binding = [0, 0, 0, 0];
+        Some(AppConfig {
+            http: (binding, port).into(),
+            webrtc_data: (binding, port).into(),
+            webrtc_public: (binding, port).into(),
+            udp: (binding, port).into(),
+        })
     }
 }
 
@@ -52,7 +69,7 @@ impl AppState {
 async fn main() {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
 
-    let config = AppConfig::default();
+    let config = AppConfig::try_from_env().unwrap_or_default();
     log::info!("config: {:#?}", config);
 
     let mut rtc_server = RtcServer::new(config.webrtc_data, config.webrtc_public)
