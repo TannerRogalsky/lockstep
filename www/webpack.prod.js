@@ -2,7 +2,6 @@ const path = require('path');
 const { merge } = require('webpack-merge');
 // const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
 const common = require('./webpack.common.js');
-const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
 
 module.exports = merge(common, {
     output: {
