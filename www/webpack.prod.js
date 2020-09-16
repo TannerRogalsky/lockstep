@@ -13,7 +13,7 @@ module.exports = merge(common, {
     plugins: [
         new WasmPackPlugin({
             crateDirectory: path.resolve(__dirname, '..', 'client'),
-            outDir: '../pkg',
+            outDir: path.resolve(__dirname, '..', 'pkg'),
         }),
     ],
 });
