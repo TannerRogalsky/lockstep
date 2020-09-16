@@ -3,6 +3,6 @@
   "version": "0.1.0",
   "cacheDirectories": ["www/node_modules"],
   "scripts": {
-    "postinstall": "cd www && npm install && npm build"
+    "postinstall": "cd www && npm install && npm run build"
   }
 }
