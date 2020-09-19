@@ -1,4 +1,5 @@
-use simba::scalar::FixedI32F32 as Float;
+// use simba::scalar::FixedI32F32 as Float;
+use fixed::types::I32F32 as Float;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
@@ -10,20 +11,11 @@ pub fn main() {
 type Point2D = nalgebra::Point2<Float>;
 type Vector2D = nalgebra::Vector2<Float>;
 
-mod consts {
-    fixed::const_fixed_from_int! {
-        const DENSITY_TEMP: fixed::types::I32F32 = 1;
-        const GRAVITY_TEMP: fixed::types::I32F32 = 1;
-    }
-
-    const TICK_TEMP: fixed::types::I32F32 = fixed::types::I32F32::from_le_bytes([68, 4, 0, 0, 0, 0, 0, 0]);
-    pub const DENSITY: super::Float =
-        simba::scalar::FixedI64::<fixed::types::extra::U32>(DENSITY_TEMP);
-    pub const GRAVITY: super::Float =
-        simba::scalar::FixedI64::<fixed::types::extra::U32>(GRAVITY_TEMP);
-    pub const TICK: super::Float = simba::scalar::FixedI64::<fixed::types::extra::U32>(TICK_TEMP);
+fixed::const_fixed_from_int! {
+    const DENSITY: fixed::types::I32F32 = 1;
+    const GRAVITY: fixed::types::I32F32 = 1;
 }
-use consts::*;
+const TICK: fixed::types::I32F32 = fixed::types::I32F32::from_le_bytes([68, 4, 0, 0, 0, 0, 0, 0]);
 static ID_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 #[wasm_bindgen(inspectable)]
@@ -36,9 +28,9 @@ pub struct BodyRenderData {
 impl Into<BodyRenderData> for &Body {
     fn into(self) -> BodyRenderData {
         BodyRenderData {
-            position_x: self.position.x.0.to_num(),
-            position_y: self.position.y.0.to_num(),
-            radius: self.radius().0.to_num(),
+            position_x: self.position.x.to_num(),
+            position_y: self.position.y.to_num(),
+            radius: self.radius().to_num(),
         }
     }
 }
@@ -70,7 +62,7 @@ impl Body {
 fn distance_squared(p1: &Point2D, p2: &Point2D) -> Float {
     let dx = p2.x - p1.x;
     let dy = p2.y - p1.y;
-    (dx * dx) + (dy * dy)
+    dx.saturating_mul(dx) + dy.saturating_mul(dy)
 }
 
 impl Body {
@@ -88,8 +80,8 @@ impl Body {
     pub fn force_from(&self, other: &Body) -> Float {
         let softening_constant = Float::from_num(0.15);
         let distance = distance_squared(&self.position, &other.position);
-        let d2 = nalgebra::ComplexField::try_sqrt(distance + softening_constant).unwrap();
-        (GRAVITY * other.mass) /  simba::scalar::FixedI64::<fixed::types::extra::U32>(distance.0.saturating_mul(d2.0))
+        let d2 = distance + softening_constant;
+        (GRAVITY * other.mass) /  distance.saturating_mul(d2)
     }
 }
 
@@ -127,7 +119,7 @@ impl Simulation {
         for i in 0..self.bodies.len() {
             self.bodies[i].acceleration = {
                 let body = &self.bodies[i];
-                let mut acc = Vector2D::zeros();
+                let mut acc = Vector2D::new(Float::from_bits(0), Float::from_bits(0));
                 for other in self.bodies.iter() {
                     if body.id != other.id {
                         let d = other.position.coords - body.position.coords;
@@ -178,9 +170,9 @@ mod tests {
         sim.bodies.push(b1);
         sim.bodies.push(b2);
 
-        let d1 = nalgebra::distance(&sim.bodies[0].position, &sim.bodies[1].position);
+        let d1 = distance_squared(&sim.bodies[0].position, &sim.bodies[1].position);
         sim.step();
-        let d2 = nalgebra::distance(&sim.bodies[0].position, &sim.bodies[1].position);
+        let d2 = distance_squared(&sim.bodies[0].position, &sim.bodies[1].position);
         assert!(d1 > d2);
     }
 
