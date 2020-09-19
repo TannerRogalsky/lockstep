@@ -90,7 +90,7 @@ impl State {
         };
         {
             let buf = bincode::serialize(&self.inner.physics_state).unwrap();
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            let mut hasher = twox_hash::XxHash64::with_seed(0);
             std::hash::Hash::hash(&buf, &mut hasher);
             let hash = std::hash::Hasher::finish(&hasher);
             self.hashes.push((self.inner.frame_index, hash));

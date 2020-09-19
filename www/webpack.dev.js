@@ -11,20 +11,10 @@ module.exports = merge(common, {
     devtool: 'inline-source-map',
     devServer: {
     // contentBase: './dist',
-    proxy: {
-        '/new_rtc_session': {
-            target: 'http://localhost:3030',
-            changeOrigin: true,
-        },
-        '/state': {
-            target: 'http://localhost:3030',
-            changeOrigin: true,
-        },
-      // '/ws': {
-      //   target: 'http://localhost:3030',
-      //   changeOrigin: true,
-      //   ws: true,
-      // },
-  },
+    proxy: [{
+      context: ['/new_rtc_session', '/state', '/hash'],
+      target: 'http://localhost:3030',
+      changeOrigin: true,
+    }]
 },
 });

@@ -49,6 +49,32 @@ pub struct PhysicsState {
     pub joints: JointSet,
 }
 
+#[wasm_bindgen]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+pub struct SharedState {
+    test_field1: u64,
+    test_field2: simba::scalar::FixedI16F16,
+    test_field3: Vector2<simba::scalar::FixedI16F16>,
+}
+
+#[wasm_bindgen]
+impl SharedState {
+    #[wasm_bindgen(constructor)]
+    pub fn new(test_field1: u64, test_field2: f32) -> Self {
+        let v = simba::scalar::FixedI16F16::from_num(test_field2);
+        Self {
+            test_field1,
+            test_field2: v,
+            test_field3: Vector2::new(v, v),
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn from_json(json: JsValue) -> Result<SharedState, JsValue> {
+        serde_wasm_bindgen::from_value(json).map_err(Into::into)
+    }
+}
+
 #[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct IndexedState<T> {
     pub frame_index: FrameIndex,

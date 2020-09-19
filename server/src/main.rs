@@ -66,6 +66,11 @@ impl AppState {
 async fn main() {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
 
+    let mut hasher = twox_hash::XxHash64::with_seed(0);
+    std::hash::Hash::hash(&0, &mut hasher);
+    let hash = std::hash::Hasher::finish(&hasher);
+    log::info!("hash: {}", hash);
+
     let config = AppConfig::try_from_env().unwrap_or_default();
     log::info!("config: {:#?}", config);
 
@@ -78,12 +83,12 @@ async fn main() {
     tokio::spawn({
         let state = std::sync::Arc::clone(&state);
         let dur = std::time::Duration::from_secs_f64(1. / 60.);
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
         async move {
             loop {
                 let r = if let Ok(mut state) = state.lock() {
                     state.step();
                     let last = state.snapshots.back().unwrap();
+                    let mut hasher = twox_hash::XxHash64::with_seed(0);
                     std::hash::Hash::hash(&last.state, &mut hasher);
                     let hash = std::hash::Hasher::finish(&hasher);
                     Some((last.frame_index, hash))
@@ -153,7 +158,12 @@ async fn main() {
                 };
                 warp::Reply::into_response(bincode::serialize(&output).unwrap())
             });
-            warp::serve(public.or(rtc).or(state_get))
+            let hash_get = warp::get().and(warp::path("hash")).map(|| {
+                let state = shared::SharedState::new(16, 1. / 60.);
+                let hash = state.hash();
+                warp::reply::json(&(hash, state))
+            });
+            warp::serve(public.or(rtc).or(state_get).or(hash_get))
                 .run(config.http)
                 .await;
         }

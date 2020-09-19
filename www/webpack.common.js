@@ -40,6 +40,9 @@ module.exports = {
     new WasmPackPlugin({
         crateDirectory: path.resolve(__dirname, '..', 'client'),
         outDir: path.resolve(__dirname, '..', 'pkg'),
+        watchDirectories: [
+          path.resolve(__dirname, '..', 'shared'),
+        ],
     }),
   ],
 };

@@ -18,3 +18,4 @@ tokio = { version = "0.2", features = ["macros", "sync", "time"] }
 futures-util = "0.3"
 warp = "0.2"
 bytes = "0.5"
+twox-hash = "1.5"

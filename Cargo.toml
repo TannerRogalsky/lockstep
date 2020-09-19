@@ -3,4 +3,5 @@ members = [
     "shared",
     "server",
     "client",
+    "nbody",
 ]
