@@ -11,15 +11,29 @@ async function run() {
 
   let simulation = new Simulation();
   for (var i = 0; i < 3; i++) {
-    simulation.add_body(new Body(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 20));
+    simulation.add_body(new Body(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 200));
   }
 
   canvas.addEventListener('mousedown', (event) => {
-    simulation.add_body(new Body(event.clientX, event.clientY, Math.random() * 20));
+    simulation.add_body(new Body(event.clientX, event.clientY, Math.random() * 200));
+
+    let bodies = [];
+    for (var i = 0; i < simulation.body_count(); i++) {
+      let r = simulation.render_data(i);
+      bodies.push({
+        x: r.position_x,
+        y: r.position_y,
+        radius: r.radius,
+      });
+      r.free();
+    }
+    console.log(bodies);
   });
 
   const loop = (t) => {
-    console.log(t);
+    canvas.width = document.body.clientWidth;
+    canvas.height = document.body.clientHeight;
+
     simulation.step();
     ctx.fillStyle = 'blue';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
