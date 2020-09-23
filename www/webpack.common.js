@@ -42,6 +42,7 @@ module.exports = {
         outDir: path.resolve(__dirname, '..', 'pkg'),
         watchDirectories: [
           path.resolve(__dirname, '..', 'shared'),
+          path.resolve(__dirname, '..', 'nbody'),
         ],
     }),
   ],

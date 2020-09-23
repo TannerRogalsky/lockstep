@@ -1,12 +1,5 @@
-// use simba::scalar::FixedI32F32 as Float;
-use fixed::types::I32F32 as Float;
-use wasm_bindgen::prelude::*;
-
-#[wasm_bindgen(start)]
-pub fn main() {
-    wasm_logger::init(wasm_logger::Config::default());
-    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-}
+pub use fixed::types::I32F32 as Float;
+use serde::{Deserialize, Serialize};
 
 type Point2D = nalgebra::Point2<Float>;
 type Vector2D = nalgebra::Vector2<Float>;
@@ -16,28 +9,9 @@ fixed::const_fixed_from_int! {
     const GRAVITY: Float = 1;
     const TICK: Float = 1;
 }
-// const TICK: Float = Float::from_le_bytes([68, 4, 0, 0, 0, 0, 0, 0]);
 static ID_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-#[wasm_bindgen(inspectable)]
-pub struct BodyRenderData {
-    pub position_x: f32,
-    pub position_y: f32,
-    pub radius: f32,
-}
-
-impl Into<BodyRenderData> for &Body {
-    fn into(self) -> BodyRenderData {
-        BodyRenderData {
-            position_x: self.position.x.to_num(),
-            position_y: self.position.y.to_num(),
-            radius: self.radius().to_num(),
-        }
-    }
-}
-
-#[wasm_bindgen]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Body {
     id: usize,
     position: Point2D,
@@ -46,9 +20,7 @@ pub struct Body {
     mass: Float,
 }
 
-#[wasm_bindgen]
 impl Body {
-    #[wasm_bindgen(constructor)]
     pub fn new(x: f32, y: f32, mass: f32) -> Self {
         Self {
             id: ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
@@ -57,6 +29,19 @@ impl Body {
             acceleration: Vector2D::new(Float::from_num(0.), Float::from_num(0.)),
             mass: Float::from_num(mass),
         }
+    }
+}
+
+impl std::hash::Hash for Body {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+        self.position.x.hash(state);
+        self.position.y.hash(state);
+        self.velocity.x.hash(state);
+        self.velocity.y.hash(state);
+        self.acceleration.x.hash(state);
+        self.acceleration.y.hash(state);
+        self.mass.hash(state);
     }
 }
 
@@ -109,35 +94,28 @@ impl Body {
     }
 }
 
-#[wasm_bindgen]
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct Simulation {
     bodies: Vec<Body>,
 }
 
-#[wasm_bindgen]
+impl std::hash::Hash for Simulation {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for body in self.bodies.iter() {
+            body.hash(state);
+        }
+    }
+}
+
 impl Simulation {
-    #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Default::default()
     }
 
-    #[wasm_bindgen]
-    pub fn body_count(&self) -> usize {
-        self.bodies.len()
-    }
-
-    #[wasm_bindgen]
-    pub fn render_data(&self, index: usize) -> Option<BodyRenderData> {
-        self.bodies.get(index).map(Into::into)
-    }
-
-    #[wasm_bindgen]
     pub fn add_body(&mut self, body: Body) {
         self.bodies.push(body)
     }
 
-    #[wasm_bindgen]
     pub fn step(&mut self) {
         // update accelerations
         for i in 0..self.bodies.len() {

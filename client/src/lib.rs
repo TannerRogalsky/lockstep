@@ -11,7 +11,7 @@ pub fn main() {
 
 #[wasm_bindgen]
 pub struct State {
-    inner: shared::State<()>,
+    inner: shared::State,
     input_state: shared::InputState,
     connection: Connection,
     latency_buffer: LatencyBuffer,
@@ -22,19 +22,17 @@ pub struct State {
 impl State {
     #[wasm_bindgen(constructor)]
     pub fn new(connection: Connection) -> State {
-        Self::new_with_state(shared::State::new(()), connection)
+        Self::new_with_state(shared::State::new(), connection)
     }
 
     #[wasm_bindgen]
-    pub fn with_physics_raw(data: &[u8], connection: Connection) -> Result<State, JsValue> {
-        let physics_state: shared::IndexedState<shared::PhysicsState> =
+    pub fn from_raw(data: &[u8], connection: Connection) -> Result<State, JsValue> {
+        let inner: shared::State =
             bincode::deserialize(data).map_err(|e| JsValue::from_str(&format!("{}", e)))?;
-        let mut state = shared::State::new_with_state(physics_state.state, ());
-        state.frame_index = physics_state.frame_index;
-        Ok(Self::new_with_state(state, connection))
+        Ok(Self::new_with_state(inner, connection))
     }
 
-    fn new_with_state(inner: shared::State<()>, connection: Connection) -> State {
+    fn new_with_state(inner: shared::State, connection: Connection) -> State {
         Self {
             inner,
             input_state: Default::default(),
@@ -64,7 +62,7 @@ impl State {
                             if other_frame_index == &frame_index {
                                 if other_hash != &hash {
                                     log::error!(
-                                        "Hash mismatch for frame {}. Expected {} but found {}",
+                                        "Hash mismatch for frame {}. Expected {:x} but found {:x}",
                                         frame_index,
                                         hash,
                                         other_hash
@@ -89,13 +87,12 @@ impl State {
             Err(err) => Err(JsValue::from_str(&err.to_string())),
         };
         {
-            let buf = bincode::serialize(&self.inner.physics_state).unwrap();
             let mut hasher = twox_hash::XxHash64::with_seed(0);
-            std::hash::Hash::hash(&buf, &mut hasher);
+            std::hash::Hash::hash(&self.inner.simulation, &mut hasher);
             let hash = std::hash::Hasher::finish(&hasher);
             self.hashes.push((self.inner.frame_index, hash));
         }
-        self.inner.step(self.input_state);
+        self.inner.step();
         r
     }
 
@@ -106,7 +103,7 @@ impl State {
 
     #[wasm_bindgen]
     pub fn to_json(&self) -> Result<JsValue, JsValue> {
-        serde_wasm_bindgen::to_value(&self.inner.physics_state.colliders).map_err(Into::into)
+        serde_wasm_bindgen::to_value(&self.inner).map_err(Into::into)
     }
 
     #[wasm_bindgen]
