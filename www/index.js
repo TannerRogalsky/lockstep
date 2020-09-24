@@ -6,29 +6,18 @@ async function run() {
       urls: ['stun:stun.l.google.com:19302'],
     }],
   });
-  const channel = await Connection.connect(peer);
+  try {
+    const channel = await Connection.connect(peer);
+  } catch (err) {
+    console.error(err);
+    return;
+  }
   console.log(peer.sctp);
 
   const state_buffer = await fetch('state')
     	.then((r) => r.arrayBuffer())
     	.then((e) => new Uint8Array(e));
   const state = State.from_raw(state_buffer, channel);
-
-  // let i = 0;
-  // let channelLoop = () => {
-  //     channel.send_num(i);
-  //     i++;
-  //     if (i > 1) {
-  //         return;
-  //     }
-  //     requestAnimationFrame(channelLoop);
-  // };
-  // channelLoop();
-
-  // let p1 = channel.recv_fut().await();
-  // let p2 = channel.recv_fut().await();
-  // console.log(await p2);
-  // console.log(await p1);
 
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');

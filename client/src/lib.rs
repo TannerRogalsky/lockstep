@@ -1,7 +1,10 @@
 use wasm_bindgen::prelude::*;
 
 mod connection;
-pub use connection::Connection;
+mod latency_buffer;
+
+use connection::Connection;
+use latency_buffer::LatencyBuffer;
 
 #[wasm_bindgen(start)]
 pub fn main() {
@@ -37,7 +40,7 @@ impl State {
             inner,
             input_state: Default::default(),
             connection,
-            latency_buffer: Default::default(),
+            latency_buffer: LatencyBuffer::with_timeout(std::time::Duration::from_secs(1)),
             hashes: Default::default(),
         }
     }
@@ -46,8 +49,7 @@ impl State {
     pub fn step(&mut self) -> Result<(), JsValue> {
         self.connection
             .send(&bincode::serialize(&shared::Send::Ping(self.inner.frame_index)).unwrap())?;
-        self.latency_buffer
-            .send(self.inner.frame_index, instant::Instant::now());
+        self.latency_buffer.send(self.inner.frame_index);
         while let Some(input) = self.connection.recv() {
             if let Ok(input) = bincode::deserialize::<shared::Recv>(&input) {
                 match input {
@@ -110,37 +112,10 @@ impl State {
     pub fn latency_secs(&self) -> f32 {
         self.latency_buffer.average_latency().as_secs_f32()
     }
-}
 
-#[derive(Clone, Debug, Default)]
-struct LatencyBuffer {
-    buffer: Vec<(shared::FrameIndex, instant::Instant)>,
-    timings: Vec<std::time::Duration>,
-}
-
-impl LatencyBuffer {
-    pub fn send(&mut self, index: shared::FrameIndex, time: instant::Instant) {
-        self.buffer.push((index, time))
-    }
-
-    pub fn recv(&mut self, frame: shared::FrameIndex) -> std::time::Duration {
-        for (index, (other, instant)) in self.buffer.iter().enumerate() {
-            if frame == *other {
-                let d = instant.elapsed();
-                self.timings.push(d);
-                self.buffer.swap_remove(index);
-                return d;
-            }
-        }
-        unreachable!()
-    }
-
-    pub fn average_latency(&self) -> std::time::Duration {
-        if self.timings.is_empty() {
-            std::time::Duration::default()
-        } else {
-            self.timings.iter().sum::<std::time::Duration>() / self.timings.len() as u32
-        }
+    #[wasm_bindgen]
+    pub fn packet_loss(&self) -> f32 {
+        self.latency_buffer.packet_loss()
     }
 }
 
