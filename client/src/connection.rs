@@ -131,6 +131,9 @@ impl Connection {
                 wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request)).await?;
 
             let resp: web_sys::Response = resp_value.dyn_into()?;
+            if !resp.ok() {
+                return Err(JsValue::from_str(resp.status_text().as_str()));
+            }
             let json = wasm_bindgen_futures::JsFuture::from(resp.json()?).await?;
 
             let answer = js_sys::Reflect::get(&json, &JsValue::from_str("answer"))?;
