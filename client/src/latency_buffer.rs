@@ -14,7 +14,7 @@ impl LatencyBuffer {
             timings: std::collections::VecDeque::with_capacity(100),
             timeout,
             lost_packet_count: 0,
-            recvd_packet_count: 0
+            recvd_packet_count: 0,
         }
     }
 
@@ -54,6 +54,10 @@ impl LatencyBuffer {
     }
 
     pub fn packet_loss(&self) -> f32 {
-        self.recvd_packet_count as f32 / self.lost_packet_count as f32
+        if self.recvd_packet_count == 0 {
+            0.
+        } else {
+            self.lost_packet_count as f32 / self.recvd_packet_count as f32
+        }
     }
 }

@@ -37,13 +37,13 @@ impl AppConfig {
 
 struct AppState {
     current: shared::State,
-    input_recver: mpsc::UnboundedReceiver<shared::IndexedState<shared::InputState>>,
+    input_recver: mpsc::UnboundedReceiver<shared::IndexedState<shared::MouseDownEvent>>,
     state_sender: watch::Sender<shared::State>,
 }
 
 impl AppState {
     pub fn new(
-        input_recver: mpsc::UnboundedReceiver<shared::IndexedState<shared::InputState>>,
+        input_recver: mpsc::UnboundedReceiver<shared::IndexedState<shared::MouseDownEvent>>,
     ) -> (Self, watch::Receiver<shared::State>) {
         let (state_sender, recver) = watch::channel(Default::default());
         (
@@ -58,7 +58,7 @@ impl AppState {
 
     pub fn step(&mut self) -> Result<(), watch::error::SendError<shared::State>> {
         while let Ok(input) = self.input_recver.try_recv() {
-            log::trace!("recved input, {:?}", input);
+            self.current.input_buffer.push(input);
         }
         self.current.step();
         self.state_sender.broadcast(self.current.clone())
@@ -137,7 +137,9 @@ async fn main() {
                 .and_then(rtc_callback);
             let state_get = warp::get().and(warp::path("state")).map(move || {
                 let output = state_recver.borrow();
-                let ser = bincode::serialize(&*output).unwrap();
+                log::debug!("{:?}", &*output);
+                let hash = output.hash();
+                let ser = bincode::serialize(&(hash, &*output)).unwrap();
                 warp::Reply::into_response(ser)
             });
             warp::serve(public.or(rtc).or(state_get))
@@ -147,9 +149,7 @@ async fn main() {
     });
 
     async fn on_internal_message(rtc_server: &mut RtcServer, state: shared::State) {
-        let mut hasher = twox_hash::XxHash64::with_seed(0);
-        std::hash::Hash::hash(&state.simulation, &mut hasher);
-        let hash = std::hash::Hasher::finish(&hasher);
+        let hash = state.hash();
         let msg = shared::Recv::StateHash(shared::IndexedState {
             frame_index: state.frame_index,
             state: hash,
@@ -173,19 +173,19 @@ async fn main() {
     async fn on_external_message(
         rtc_server: &mut RtcServer,
         message_buf: &mut Vec<u8>,
-        input_sender: &mpsc::UnboundedSender<shared::IndexedState<shared::InputState>>,
+        input_sender: &mpsc::UnboundedSender<shared::IndexedState<shared::MouseDownEvent>>,
         message: Option<(webrtc_unreliable::MessageType, std::net::SocketAddr)>,
     ) {
         if let Some((message_type, remote_addr)) = message {
             let response = match bincode::deserialize::<shared::Send>(&message_buf) {
                 Err(err) => {
-                    log::error!("{}", err);
+                    log::error!("deserialize error: {}", err);
                     None
                 }
                 Ok(shared::Send::Ping(frame_index)) => Some(shared::Recv::Pong(frame_index)),
                 Ok(shared::Send::InputState(input_state)) => {
                     if let Err(err) = input_sender.send(input_state) {
-                        log::error!("{}", err);
+                        log::error!("input send error: {}", err);
                     }
                     None
                 }

@@ -21,20 +21,27 @@ pub struct Body {
 }
 
 impl Body {
-    pub fn new(x: f32, y: f32, mass: f32) -> Self {
+    pub fn new(x: Float, y: Float, mass: Float) -> Self {
         Self {
             id: ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-            position: Point2D::new(Float::from_num(x), Float::from_num(y)),
-            velocity: Vector2D::new(Float::from_num(0.), Float::from_num(0.)),
-            acceleration: Vector2D::new(Float::from_num(0.), Float::from_num(0.)),
-            mass: Float::from_num(mass),
+            position: Point2D::new(x, y),
+            velocity: Vector2D::new(Float::from_bits(0), Float::from_bits(0)),
+            acceleration: Vector2D::new(Float::from_bits(0), Float::from_bits(0)),
+            mass,
         }
+    }
+
+    pub fn new_lossy(x: f32, y: f32, mass: f32) -> Self {
+        Self::new(
+            Float::from_num(x),
+            Float::from_num(y),
+            Float::from_num(mass),
+        )
     }
 }
 
 impl std::hash::Hash for Body {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
         self.position.x.hash(state);
         self.position.y.hash(state);
         self.velocity.x.hash(state);
@@ -113,6 +120,7 @@ impl Simulation {
     }
 
     pub fn add_body(&mut self, body: Body) {
+        log::debug!("adding bod");
         self.bodies.push(body)
     }
 

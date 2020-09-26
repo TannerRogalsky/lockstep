@@ -15,7 +15,6 @@ pub fn main() {
 #[wasm_bindgen]
 pub struct State {
     inner: shared::State,
-    input_state: shared::InputState,
     connection: Connection,
     latency_buffer: LatencyBuffer,
     hashes: Vec<(shared::FrameIndex, u64)>,
@@ -30,15 +29,15 @@ impl State {
 
     #[wasm_bindgen]
     pub fn from_raw(data: &[u8], connection: Connection) -> Result<State, JsValue> {
-        let inner: shared::State =
+        let (hash, inner): (u64, shared::State) =
             bincode::deserialize(data).map_err(|e| JsValue::from_str(&format!("{}", e)))?;
+        assert_eq!(hash, inner.hash());
         Ok(Self::new_with_state(inner, connection))
     }
 
     fn new_with_state(inner: shared::State, connection: Connection) -> State {
         Self {
             inner,
-            input_state: Default::default(),
             connection,
             latency_buffer: LatencyBuffer::with_timeout(std::time::Duration::from_secs(1)),
             hashes: Default::default(),
@@ -75,32 +74,34 @@ impl State {
                         }
                     }
                     shared::Recv::FullState(_) => unimplemented!(),
+                    shared::Recv::InputState(input) => self.inner.input_buffer.push(input),
                 }
             }
         }
 
-        // TODO: error-prone: frame changes when?
-        let to_send = shared::Send::InputState(shared::IndexedState {
-            frame_index: self.inner.frame_index,
-            state: self.input_state,
-        });
-        let r = match bincode::serialize(&to_send) {
-            Ok(state) => self.connection.send(&state),
-            Err(err) => Err(JsValue::from_str(&err.to_string())),
-        };
         {
-            let mut hasher = twox_hash::XxHash64::with_seed(0);
-            std::hash::Hash::hash(&self.inner.simulation, &mut hasher);
-            let hash = std::hash::Hasher::finish(&hasher);
+            let hash = self.inner.hash();
             self.hashes.push((self.inner.frame_index, hash));
         }
         self.inner.step();
-        r
+        Ok(())
     }
 
     #[wasm_bindgen]
-    pub fn input_state_changed(&mut self, input_state: shared::InputState) {
-        self.input_state = input_state;
+    pub fn mouse_down(&mut self, x: f32, y: f32, mass: f32) {
+        let input_event = shared::IndexedState {
+            frame_index: self.inner.frame_index + shared::INPUT_BUFFER_FRAMES,
+            state: shared::MouseDownEvent::new(x, y, mass),
+        };
+        self.inner.input_buffer.push(input_event);
+        match bincode::serialize(&shared::Send::InputState(input_event)) {
+            Ok(state) => {
+                if let Err(err) = self.connection.send(&state) {
+                    log::error!("failed send: {}", err.as_string().unwrap());
+                }
+            }
+            Err(err) => log::error!("serialization error: {}", err),
+        };
     }
 
     #[wasm_bindgen]

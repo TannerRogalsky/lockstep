@@ -1,4 +1,4 @@
-import { Connection, State, InputState } from 'client';
+import { Connection, State } from 'client';
 
 async function run() {
   const peer = new RTCPeerConnection({
@@ -6,10 +6,8 @@ async function run() {
       urls: ['stun:stun.l.google.com:19302'],
     }],
   });
-  try {
-    const channel = await Connection.connect(peer);
-  } catch (err) {
-    console.error(err);
+  const channel = await Connection.connect(peer).catch(err => console.error(err));
+  if (!channel) {
     return;
   }
   console.log(peer.sctp);
@@ -23,17 +21,22 @@ async function run() {
   const ctx = canvas.getContext('2d');
 
   canvas.addEventListener('mousedown', (event) => {
-    state.input_state_changed(new InputState(2 * (Math.random() - 0.5), 5, true));
-  });
-
-  canvas.addEventListener('mouseup', (event) => {
-    state.input_state_changed(new InputState(0, 0, false));
+    state.mouse_down(event.x, event.y, Math.random() * 2000);
   });
 
   let prev_t = performance.now();
   const loop = (t) => {
     state.step();
-    // const json = state.to_json();
+    const json = state.to_json();
+    canvas.width = document.body.clientWidth;
+    canvas.height = document.body.clientHeight;
+
+    ctx.font = '50px serif';
+    ctx.fillText(`FPS: ${state.latency_secs()}`, 0, 50);
+    ctx.fillText(`PKT LOSS: ${state.packet_loss()}`, 0, 100);
+    ctx.fillText(`FRAME: ${json.frame_index}`, 0, 150);
+    ctx.fillText(`BODIES: ${json.simulation.bodies.length}`, 0, 200);
+
     requestAnimationFrame(loop);
   };
   loop();
