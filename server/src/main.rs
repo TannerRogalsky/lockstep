@@ -137,7 +137,6 @@ async fn main() {
                 .and_then(rtc_callback);
             let state_get = warp::get().and(warp::path("state")).map(move || {
                 let output = state_recver.borrow();
-                log::debug!("{:?}", &*output);
                 let hash = output.hash();
                 let ser = bincode::serialize(&(hash, &*output)).unwrap();
                 warp::Reply::into_response(ser)

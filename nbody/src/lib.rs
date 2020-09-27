@@ -1,4 +1,4 @@
-pub use fixed::types::I32F32 as Float;
+pub use fixed::types::I50F14 as Float;
 use serde::{Deserialize, Serialize};
 
 type Point2D = nalgebra::Point2<Float>;
@@ -59,7 +59,7 @@ fn distance_squared(p1: &Point2D, p2: &Point2D) -> Float {
 }
 
 fn lerp(v0: Float, v1: Float, t: Float) -> Float {
-    (Float::from_bits(1 << 32) - t) * v0 + t * v1
+    (Float::from(1) - t) * v0 + t * v1
 }
 
 fn lerp_point(v0: Point2D, v1: Point2D, t: Float) -> Point2D {
@@ -131,33 +131,10 @@ impl Simulation {
     }
 
     pub fn add_body(&mut self, body: Body) {
-        log::debug!("adding bod");
         self.bodies.push(body)
     }
 
     pub fn step(&mut self) {
-        // update accelerations
-        for i in 0..self.bodies.len() {
-            self.bodies[i].acceleration = {
-                let body = &self.bodies[i];
-                let mut acc = Vector2D::new(Float::from_bits(0), Float::from_bits(0));
-                for other in self.bodies.iter() {
-                    if body.id != other.id {
-                        let d = other.position.coords - body.position.coords;
-                        let force = body.force_from(other);
-                        acc += d * force;
-                    }
-                }
-                acc
-            };
-        }
-
-        // update velocities & positions
-        for body in self.bodies.iter_mut() {
-            body.velocity += &body.acceleration * TICK;
-            body.position += &body.velocity * TICK;
-        }
-
         let mut collisions = std::collections::HashSet::new();
         for body1 in self.bodies.iter() {
             for body2 in self.bodies.iter() {
@@ -192,6 +169,26 @@ impl Simulation {
                 }
             }
         }
+
+        // update accelerations
+        for i in 0..self.bodies.len() {
+            self.bodies[i].acceleration = {
+                let body = &self.bodies[i];
+                let mut acc = Vector2D::new(Float::from_bits(0), Float::from_bits(0));
+                for other in self.bodies.iter() {
+                    if body.id != other.id {
+                        acc += body.acceleration_from(other);
+                    }
+                }
+                acc
+            };
+        }
+
+        // update velocities & positions
+        for body in self.bodies.iter_mut() {
+            body.velocity += &body.acceleration * TICK;
+            body.position += &body.velocity * TICK;
+        }
     }
 }
 
@@ -223,6 +220,14 @@ mod tests {
         let p2 = Point2D::new(Float::from(1), Float::from(1));
         let half = Float::from_num(0.5);
         assert_eq!(lerp_point(p1, p2, half), Point2D::new(half, half))
+    }
+
+    #[test]
+    fn force_from_test() {
+        let b1 = Body::new_lossy(0., 0., 1.);
+        let b2 = Body::new_lossy(0., 0., 1.);
+
+        assert_eq!(b1.force_from(&b2), Float::from_bits(0))
     }
 
     #[test]
@@ -259,7 +264,7 @@ mod tests {
     }
 
     #[test]
-    fn sim_collision() {
+    fn sim_collision1() {
         let b1 = Body::new_lossy(0., 0., 1.);
         let b2 = Body::new_lossy(1., 0., 1.);
         assert!(b1.collides_with(&b2));
@@ -274,7 +279,26 @@ mod tests {
     }
 
     #[test]
-    fn sim() {
+    fn sim_collision2() {
+        let b1 = Body::new_lossy(0., 0., 10.);
+        let b2 = Body::new_lossy(1., 0., 10.);
+        assert!(b1.collides_with(&b2));
+
+        let mut sim = Simulation::default();
+        sim.bodies.push(b1);
+        sim.bodies.push(b2);
+
+        assert_eq!(sim.bodies.len(), 2);
+        sim.step();
+        assert_eq!(sim.bodies.len(), 1);
+
+        let b3 = sim.bodies.get(0).unwrap();
+        assert!(b1.position.x < b3.position.x);
+        assert!(b2.position.x > b3.position.x);
+    }
+
+    #[test]
+    fn sim_rand() {
         use rand::prelude::*;
 
         let mut sim = Simulation::new();
@@ -287,5 +311,35 @@ mod tests {
             ));
         }
         sim.step();
+    }
+
+    #[test]
+    fn distance_attenuation() {
+        let b1 = Body::new_lossy(0., 0., 1.);
+        let b2 = Body::new_lossy(10., 0., 1.);
+        let b3 = Body::new_lossy(100., 0., 1.);
+
+        let f1 = b1.force_from(&b2);
+        let f2 = b1.force_from(&b3);
+
+        assert!(f1 > f2, "{} <= {}", f1, f2);
+    }
+
+    #[test]
+    fn collision_integrations() {
+        let b1 = Body::new_lossy(0., 0., 1.);
+        let b2 = Body::new_lossy(10., 0., 1.);
+
+        let mut sim = Simulation::new();
+        sim.add_body(b1);
+        sim.add_body(b2);
+
+        while sim.bodies.len() > 1 {
+            sim.step();
+        }
+
+        let b3 = sim.bodies.get(0).unwrap();
+        assert!(b1.position.x < b3.position.x);
+        assert!(b2.position.x > b3.position.x);
     }
 }
