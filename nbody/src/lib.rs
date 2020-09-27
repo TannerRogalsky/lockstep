@@ -216,15 +216,15 @@ mod tests {
 
     #[test]
     fn mass_volume_density_radius() {
-        let b1 = Body::new(0., 0., 1.);
+        let b1 = Body::new_lossy(0., 0., 1.);
         assert_eq!(b1.volume(), Float::from_num(1));
     }
 
     #[test]
     fn collision() {
-        let b1 = Body::new(0., 0., 1.);
-        let b2 = Body::new(2., 0., 0.5);
-        let b3 = Body::new(1., 0., 4.);
+        let b1 = Body::new_lossy(0., 0., 1.);
+        let b2 = Body::new_lossy(2., 0., 0.5);
+        let b3 = Body::new_lossy(1., 0., 4.);
 
         assert!(!b1.collides_with(&b2));
         assert!(b1.collides_with(&b3));
@@ -233,8 +233,8 @@ mod tests {
 
     #[test]
     fn sim_acceleration() {
-        let b1 = Body::new(0., 0., 1.);
-        let b2 = Body::new(3., 0., 1.);
+        let b1 = Body::new_lossy(0., 0., 1.);
+        let b2 = Body::new_lossy(3., 0., 1.);
         assert!(b1.force_from(&b2) > Float::from_num(0.));
 
         let mut sim = Simulation::default();
@@ -249,8 +249,8 @@ mod tests {
 
     #[test]
     fn sim_collision() {
-        let b1 = Body::new(0., 0., 1.);
-        let b2 = Body::new(1., 0., 1.);
+        let b1 = Body::new_lossy(0., 0., 1.);
+        let b2 = Body::new_lossy(1., 0., 1.);
         assert!(b1.collides_with(&b2));
 
         let mut sim = Simulation::default();
@@ -269,7 +269,7 @@ mod tests {
         let mut sim = Simulation::new();
         let mut rng = thread_rng();
         for _ in 0..100 {
-            sim.add_body(Body::new(
+            sim.add_body(Body::new_lossy(
                 rng.gen_range(0., 480.),
                 rng.gen_range(0., 480.),
                 rng.gen_range(0., 0.2),
