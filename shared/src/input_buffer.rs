@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-pub const INPUT_BUFFER_FRAMES: super::FrameIndex = 15;
+pub const INPUT_BUFFER_FRAMES: super::FrameIndex = 7;
 type Input = super::IndexedState<super::MouseDownEvent>;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Hash)]

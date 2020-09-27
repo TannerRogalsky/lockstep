@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 mod connection;
@@ -18,6 +19,8 @@ pub struct State {
     connection: Connection,
     latency_buffer: LatencyBuffer,
     hashes: Vec<(shared::FrameIndex, u64)>,
+    /// The most recent frame index that we've received from the server.
+    server_frame: shared::FrameIndex,
 }
 
 #[wasm_bindgen]
@@ -29,26 +32,25 @@ impl State {
 
     #[wasm_bindgen]
     pub fn from_raw(data: &[u8], connection: Connection) -> Result<State, JsValue> {
-        let (hash, inner): (u64, shared::State) =
-            bincode::deserialize(data).map_err(|e| JsValue::from_str(&format!("{}", e)))?;
+        let (hash, inner) = bincode::deserialize::<(u64, shared::State)>(data)
+            .map_err(|e| JsValue::from_str(&format!("{}", e)))?;
         assert_eq!(hash, inner.hash());
         Ok(Self::new_with_state(inner, connection))
     }
 
     fn new_with_state(inner: shared::State, connection: Connection) -> State {
+        let server_frame = inner.frame_index;
         Self {
             inner,
             connection,
             latency_buffer: LatencyBuffer::with_timeout(std::time::Duration::from_secs(1)),
             hashes: Default::default(),
+            server_frame,
         }
     }
 
     #[wasm_bindgen]
     pub fn step(&mut self) -> Result<(), JsValue> {
-        self.connection
-            .send(&bincode::serialize(&shared::Send::Ping(self.inner.frame_index)).unwrap())?;
-        self.latency_buffer.send(self.inner.frame_index);
         while let Some(input) = self.connection.recv() {
             if let Ok(input) = bincode::deserialize::<shared::Recv>(&input) {
                 match input {
@@ -59,6 +61,8 @@ impl State {
                         frame_index,
                         state: hash,
                     }) => {
+                        self.server_frame = self.server_frame.max(frame_index);
+                        // TODO: clear out old hashes
                         for (other_frame_index, other_hash) in self.hashes.iter() {
                             if other_frame_index == &frame_index {
                                 if other_hash != &hash {
@@ -79,11 +83,20 @@ impl State {
             }
         }
 
-        {
-            let hash = self.inner.hash();
-            self.hashes.push((self.inner.frame_index, hash));
+        match bincode::serialize(&shared::Send::Ping(self.inner.frame_index)) {
+            Ok(buf) => self.connection.send(&buf)?,
+            Err(err) => log::error!("serialization error: {}", err),
         }
+        self.latency_buffer.send(self.inner.frame_index);
+
+        if self.inner.frame_index > self.target_frame() {
+            return Ok(());
+        }
+
+        let hash_pair = (self.inner.frame_index, self.inner.hash());
+        self.hashes.push(hash_pair);
         self.inner.step();
+        // TODO: if client is behind the server, run multiple steps
         Ok(())
     }
 
@@ -106,7 +119,18 @@ impl State {
 
     #[wasm_bindgen]
     pub fn to_json(&self) -> Result<JsValue, JsValue> {
-        serde_wasm_bindgen::to_value(&self.inner).map_err(Into::into)
+        let render_data = self
+            .inner
+            .simulation
+            .bodies
+            .iter()
+            .map(|body| RenderDataBody {
+                x: body.position.x.to_num(),
+                y: body.position.y.to_num(),
+                radius: body.radius().to_num(),
+            })
+            .collect::<Box<[RenderDataBody]>>();
+        serde_wasm_bindgen::to_value(&render_data).map_err(Into::into)
     }
 
     #[wasm_bindgen]
@@ -118,6 +142,23 @@ impl State {
     pub fn packet_loss(&self) -> f32 {
         self.latency_buffer.packet_loss()
     }
+
+    #[wasm_bindgen]
+    pub fn current_frame(&self) -> shared::FrameIndex {
+        self.inner.frame_index
+    }
+
+    #[wasm_bindgen]
+    pub fn target_frame(&self) -> shared::FrameIndex {
+        self.server_frame + self.latency_buffer.average_latency().as_millis() as u32 / 60
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct RenderDataBody {
+    x: f32,
+    y: f32,
+    radius: f32,
 }
 
 #[cfg(test)]

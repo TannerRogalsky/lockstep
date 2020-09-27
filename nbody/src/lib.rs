@@ -14,7 +14,7 @@ static ID_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsi
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Body {
     id: usize,
-    position: Point2D,
+    pub position: Point2D,
     velocity: Vector2D,
     acceleration: Vector2D,
     mass: Float,
@@ -103,7 +103,7 @@ impl Body {
 
 #[derive(Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct Simulation {
-    bodies: Vec<Body>,
+    pub bodies: Vec<Body>,
 }
 
 impl std::hash::Hash for Simulation {

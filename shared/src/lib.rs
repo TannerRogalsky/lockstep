@@ -87,7 +87,11 @@ impl State {
             if input.frame_index == self.frame_index {
                 self.handle_event(input.state);
             } else if input.frame_index < self.frame_index {
-                log::warn!("missed input for frame {}", input.frame_index);
+                log::warn!(
+                    "missed input for frame {}. current frame: {}",
+                    input.frame_index,
+                    self.frame_index
+                );
             } else {
                 break;
             }
