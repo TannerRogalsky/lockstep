@@ -97,7 +97,18 @@ impl Body {
         let softening_constant = Float::from_num(0.15);
         let distance = distance_squared(&self.position, &other.position);
         let d2 = distance.saturating_add(softening_constant);
-        (GRAVITY * other.mass) / distance.saturating_mul(d2)
+        let d = distance.saturating_mul(d2);
+        if d == Float::from_bits(0) {
+            Float::from_bits(0)
+        } else {
+            (GRAVITY * other.mass) / d
+        }
+    }
+
+    pub fn acceleration_from(&self, other: &Body) -> Vector2D {
+        let force = self.force_from(other);
+        let distance = &other.position.coords - &self.position.coords;
+        distance * force
     }
 }
 
