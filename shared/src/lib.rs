@@ -4,7 +4,6 @@ mod input_buffer;
 pub use input_buffer::*;
 
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::prelude::*;
 
 pub type FrameIndex = u32;
 
@@ -22,7 +21,6 @@ pub enum Recv {
     FullState(State),
 }
 
-#[wasm_bindgen]
 #[derive(Copy, Clone, Debug, Default, Hash, Serialize, Deserialize, Eq, PartialEq)]
 pub struct MouseDownEvent {
     mouse_x: nbody::Float,
@@ -30,9 +28,7 @@ pub struct MouseDownEvent {
     mass: nbody::Float,
 }
 
-#[wasm_bindgen]
 impl MouseDownEvent {
-    #[wasm_bindgen(constructor)]
     pub fn new(mouse_x: f32, mouse_y: f32, mass: f32) -> Self {
         Self {
             mouse_x: nbody::Float::from_num(mouse_x),
