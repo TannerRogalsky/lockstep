@@ -128,6 +128,7 @@ impl State {
                 x: body.position.x.to_num(),
                 y: body.position.y.to_num(),
                 radius: body.radius().to_num(),
+                mass: body.mass.to_num(),
             })
             .collect::<Box<[RenderDataBody]>>();
         serde_wasm_bindgen::to_value(&render_data).map_err(Into::into)
@@ -159,6 +160,7 @@ struct RenderDataBody {
     x: f32,
     y: f32,
     radius: f32,
+    mass: f32,
 }
 
 #[cfg(test)]

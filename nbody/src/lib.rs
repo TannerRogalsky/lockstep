@@ -6,18 +6,21 @@ type Vector2D = nalgebra::Vector2<Float>;
 
 fixed::const_fixed_from_int! {
     const DENSITY: Float = 1;
-    const GRAVITY: Float = 1;
     const TICK: Float = 1;
 }
 static ID_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+fn zero_vec() -> Vector2D {
+    Vector2D::new(Float::from_bits(0), Float::from_bits(0))
+}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Body {
     id: usize,
     pub position: Point2D,
-    velocity: Vector2D,
-    acceleration: Vector2D,
-    mass: Float,
+    pub velocity: Vector2D,
+    pub acceleration: Vector2D,
+    pub mass: Float,
 }
 
 impl Body {
@@ -93,22 +96,22 @@ impl Body {
         d <= (r * r)
     }
 
-    pub fn force_from(&self, other: &Body) -> Float {
-        let softening_constant = Float::from_num(0.15);
-        let distance = distance_squared(&self.position, &other.position);
-        let d2 = distance.saturating_add(softening_constant);
-        let d = distance.saturating_mul(d2);
-        if d == Float::from_bits(0) {
-            Float::from_bits(0)
-        } else {
-            (GRAVITY * other.mass) / d
+    pub fn force_from(&self, other: &Body) -> Vector2D {
+        fn magnitude(v: Vector2D) -> Float {
+            let x = v.x.saturating_mul(v.x);
+            let y = v.y.saturating_mul(v.y);
+            let acc = x.saturating_add(y);
+            fixed_sqrt::FixedSqrt::sqrt(acc)
         }
-    }
 
-    pub fn acceleration_from(&self, other: &Body) -> Vector2D {
-        let force = self.force_from(other);
-        let distance = &other.position.coords - &self.position.coords;
-        distance * force
+        let diff: Vector2D = &other.position.coords - &self.position.coords;
+        let r = magnitude(diff);
+        if r == Float::from_bits(0) {
+            zero_vec()
+        } else {
+            let gravity = Float::from_num(0.1);
+            diff * gravity * other.mass / r.saturating_mul(r).saturating_mul(r)
+        }
     }
 }
 
@@ -177,7 +180,7 @@ impl Simulation {
                 let mut acc = Vector2D::new(Float::from_bits(0), Float::from_bits(0));
                 for other in self.bodies.iter() {
                     if body.id != other.id {
-                        acc += body.acceleration_from(other);
+                        acc += body.force_from(other);
                     }
                 }
                 acc
@@ -227,7 +230,7 @@ mod tests {
         let b1 = Body::new_lossy(0., 0., 1.);
         let b2 = Body::new_lossy(0., 0., 1.);
 
-        assert_eq!(b1.force_from(&b2), Float::from_bits(0))
+        assert_eq!(b1.force_from(&b2), zero_vec())
     }
 
     #[test]
@@ -251,7 +254,7 @@ mod tests {
     fn sim_acceleration() {
         let b1 = Body::new_lossy(0., 0., 1.);
         let b2 = Body::new_lossy(3., 0., 1.);
-        assert!(b1.force_from(&b2) > Float::from_num(0.));
+        assert!(b1.force_from(&b2).x > Float::from_bits(0));
 
         let mut sim = Simulation::default();
         sim.bodies.push(b1);
@@ -322,7 +325,19 @@ mod tests {
         let f1 = b1.force_from(&b2);
         let f2 = b1.force_from(&b3);
 
-        assert!(f1 > f2, "{} <= {}", f1, f2);
+        assert!(f1.x > f2.x, "{} <= {}", f1.x, f2.x);
+    }
+
+    #[test]
+    fn data_test0() {
+        let b1 = Body::new_lossy(305.72119140625, 141.26641845703125, 10021134.);
+        let b2 = Body::new_lossy(529., 825., 10000.);
+
+        assert!(
+            b1.force_from(&b2) > zero_vec(),
+            "{:?}",
+            b1.force_from(&b2).data
+        );
     }
 
     #[test]

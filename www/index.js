@@ -29,8 +29,10 @@ async function run() {
   canvas.addEventListener('resize', resize.bind(null, canvas));
   resize(canvas);
 
+  let massOptions = document.getElementById("masses");
   canvas.addEventListener('mousedown', (event) => {
-    state.mouse_down(event.x, event.y, Math.random() * 2000);
+    let mass = parseInt(massOptions.selectedOptions[0].value);
+    state.mouse_down(event.x, event.y, mass);
   });
 
   let prev_t = performance.now();
@@ -43,14 +45,6 @@ async function run() {
 
     ctx.clearRect(0, 0, canvas.width, fontSize * 5);
 
-    ctx.fillStyle = 'black';
-    ctx.font = `${50}px serif`;
-    ctx.fillText(`FPS: ${state.latency_secs()}`, 0, (++textIndex * fontSize));
-    ctx.fillText(`FRAME: ${state.current_frame()}`, 0, (++textIndex * fontSize));
-    ctx.fillText(`TARGET: ${state.target_frame()}`, 0, (++textIndex * fontSize));
-    ctx.fillText(`PKT LOSS: ${state.packet_loss()}`, 0, (++textIndex * fontSize));
-    ctx.fillText(`BODIES: ${bodies.length}`, 0, (++textIndex * fontSize));
-
     for (const body of bodies) {
       ctx.fillStyle = 'red';
       ctx.beginPath();
@@ -59,6 +53,14 @@ async function run() {
       ctx.fillStyle = 'black';
       ctx.stroke();
     }
+
+    ctx.fillStyle = 'black';
+    ctx.font = `${50}px serif`;
+    ctx.fillText(`FPS: ${state.latency_secs()}`, 0, (++textIndex * fontSize));
+    ctx.fillText(`FRAME: ${state.current_frame()}`, 0, (++textIndex * fontSize));
+    ctx.fillText(`TARGET: ${state.target_frame()}`, 0, (++textIndex * fontSize));
+    ctx.fillText(`PKT LOSS: ${state.packet_loss()}`, 0, (++textIndex * fontSize));
+    ctx.fillText(`BODIES: ${bodies.length}`, 0, (++textIndex * fontSize));
 
     requestAnimationFrame(loop);
   };
