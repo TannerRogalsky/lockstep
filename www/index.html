@@ -10,6 +10,10 @@
 
         canvas { display:block; } /* To remove the scrollbars */
 
+        #overlay {
+          position: absolute;
+        }
+
         #masses {
           position: absolute;
           top: 0px;
@@ -19,6 +23,7 @@
   </head>
   <body>
     <noscript>This page contains webassembly and javascript content, please enable javascript in your browser.</noscript>
+    <canvas id="overlay"></canvas>
     <select name="masses" id="masses">
       <option value="1">1</option>
       <option value="10">10</option>
