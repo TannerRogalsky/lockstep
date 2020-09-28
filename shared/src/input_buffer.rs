@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 pub const INPUT_BUFFER_FRAMES: super::FrameIndex = 7;
-type Input = super::IndexedState<super::MouseDownEvent>;
+type Input = super::IndexedState<super::AddBodyEvent>;
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, Hash)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct OrderedInput(Input);
 impl std::cmp::PartialEq for OrderedInput {
     fn eq(&self, other: &Self) -> bool {
@@ -19,6 +19,11 @@ impl std::cmp::PartialOrd for OrderedInput {
 impl std::cmp::Ord for OrderedInput {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.frame_index.cmp(&other.0.frame_index)
+    }
+}
+impl std::hash::Hash for OrderedInput {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.frame_index.hash(state)
     }
 }
 

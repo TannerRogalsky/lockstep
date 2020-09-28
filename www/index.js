@@ -29,11 +29,27 @@ async function run() {
   canvas.addEventListener('resize', resize.bind(null, canvas));
   resize(canvas);
 
-  let massOptions = document.getElementById("masses");
+  let mouseDown = null;
   canvas.addEventListener('mousedown', (event) => {
-    let mass = parseInt(massOptions.selectedOptions[0].value);
-    state.mouse_down(event.x, event.y, mass);
+    mouseDown = [event.x, event.y];
   });
+
+  let mousePos = [0, 0];
+  canvas.addEventListener('mousemove', (event) => {
+    mousePos[0] = event.x;
+    mousePos[1] = event.y;
+  });
+
+  let massOptions = document.getElementById("masses");
+  canvas.addEventListener('mouseup', (event) => {
+    if (!mouseDown) {
+      return;
+    }
+
+    let mass = parseInt(massOptions.selectedOptions[0].value);
+    state.mouse_click_event(mouseDown[0], mouseDown[1], mass, event.x, event.y);
+    mouseDown = null;
+  })
 
   let prev_t = performance.now();
   const loop = (t) => {
@@ -43,7 +59,8 @@ async function run() {
     let fontSize = 50;
     let textIndex = 0;
 
-    ctx.clearRect(0, 0, canvas.width, fontSize * 5);
+    // ctx.clearRect(0, 0, canvas.width, fontSize * 5);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     for (const body of bodies) {
       ctx.fillStyle = 'red';
@@ -61,6 +78,14 @@ async function run() {
     ctx.fillText(`TARGET: ${state.target_frame()}`, 0, (++textIndex * fontSize));
     ctx.fillText(`PKT LOSS: ${state.packet_loss()}`, 0, (++textIndex * fontSize));
     ctx.fillText(`BODIES: ${bodies.length}`, 0, (++textIndex * fontSize));
+
+    if (mouseDown) {
+      ctx.strokeStyle = 'blue';
+      ctx.beginPath();
+      ctx.moveTo(mouseDown[0], mouseDown[1]);
+      ctx.lineTo(mousePos[0], mousePos[1]);
+      ctx.stroke();
+    }
 
     requestAnimationFrame(loop);
   };

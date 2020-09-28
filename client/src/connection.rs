@@ -17,16 +17,20 @@ impl Into<&'static str> for Callback {
     }
 }
 
+type RcCell<T> = Rc<RefCell<T>>;
+type WeakCell<T> = std::rc::Weak<RefCell<T>>;
+
 #[wasm_bindgen]
 pub struct Connection {
     peer: web_sys::RtcPeerConnection,
     data_channel: web_sys::RtcDataChannel,
     on_message_callback: Closure<dyn FnMut(web_sys::MessageEvent)>,
     on_ice_candidate_callback: Closure<dyn FnMut(web_sys::RtcPeerConnectionIceEvent)>,
-    wakers: Rc<RefCell<Vec<std::rc::Weak<RefCell<Option<std::task::Waker>>>>>>,
+    wakers: RcCell<Vec<WeakCell<Option<std::task::Waker>>>>,
     receiver: crossbeam_channel::Receiver<Box<[u8]>>,
 }
 
+#[allow(clippy::type_complexity)]
 #[wasm_bindgen]
 impl Connection {
     #[wasm_bindgen]
@@ -246,7 +250,7 @@ impl std::future::Future for RecvFuture {
         cx: &mut std::task::Context,
     ) -> std::task::Poll<Self::Output> {
         match self.receiver.try_recv() {
-            Ok(frame) => return std::task::Poll::Ready(frame),
+            Ok(frame) => std::task::Poll::Ready(frame),
             Err(_err) => {
                 let waker = cx.waker().clone();
                 *self.waker.borrow_mut() = Some(waker);

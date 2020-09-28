@@ -14,7 +14,7 @@ fn zero_vec() -> Vector2D {
     Vector2D::new(Float::from_bits(0), Float::from_bits(0))
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, Serialize, Deserialize)]
 pub struct Body {
     id: usize,
     pub position: Point2D,
@@ -40,6 +40,12 @@ impl Body {
             Float::from_num(y),
             Float::from_num(mass),
         )
+    }
+}
+
+impl std::cmp::PartialEq for Body {
+    fn eq(&self, other: &Self) -> bool {
+        self.id.eq(&other.id)
     }
 }
 
@@ -104,7 +110,7 @@ impl Body {
     }
 
     pub fn force_from(&self, other: &Body) -> Vector2D {
-        let diff: Vector2D = &other.position.coords - &self.position.coords;
+        let diff: Vector2D = other.position.coords - self.position.coords;
         let r = magnitude(diff);
         if r == Float::from_bits(0) {
             zero_vec()
@@ -115,9 +121,15 @@ impl Body {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Default, Serialize, Deserialize)]
 pub struct Simulation {
     pub bodies: Vec<Body>,
+}
+
+impl std::cmp::PartialEq for Simulation {
+    fn eq(&self, other: &Self) -> bool {
+        self.bodies.eq(&other.bodies)
+    }
 }
 
 impl std::hash::Hash for Simulation {
@@ -141,10 +153,11 @@ impl Simulation {
         let mut collisions = std::collections::HashSet::new();
         for body1 in self.bodies.iter() {
             for body2 in self.bodies.iter() {
-                if !std::ptr::eq(body1, body2) && body1.collides_with(body2) {
-                    if !collisions.contains(&(body2.id, body1.id)) {
-                        collisions.insert((body1.id, body2.id));
-                    }
+                if !std::ptr::eq(body1, body2)
+                    && body1.collides_with(body2)
+                    && !collisions.contains(&(body2.id, body1.id))
+                {
+                    collisions.insert((body1.id, body2.id));
                 }
             }
         }
@@ -189,8 +202,8 @@ impl Simulation {
 
         // update velocities & positions
         for body in self.bodies.iter_mut() {
-            body.velocity += &body.acceleration * TICK;
-            body.position += &body.velocity * TICK;
+            body.velocity += body.acceleration * TICK;
+            body.position += body.velocity * TICK;
         }
     }
 }

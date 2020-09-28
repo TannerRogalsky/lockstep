@@ -37,13 +37,13 @@ impl AppConfig {
 
 struct AppState {
     current: shared::State,
-    input_recver: mpsc::UnboundedReceiver<shared::IndexedState<shared::MouseDownEvent>>,
+    input_recver: mpsc::UnboundedReceiver<shared::IndexedState<shared::AddBodyEvent>>,
     state_sender: watch::Sender<shared::State>,
 }
 
 impl AppState {
     pub fn new(
-        input_recver: mpsc::UnboundedReceiver<shared::IndexedState<shared::MouseDownEvent>>,
+        input_recver: mpsc::UnboundedReceiver<shared::IndexedState<shared::AddBodyEvent>>,
     ) -> (Self, watch::Receiver<shared::State>) {
         let (state_sender, recver) = watch::channel(Default::default());
         (
@@ -172,7 +172,7 @@ async fn main() {
     async fn on_external_message(
         rtc_server: &mut RtcServer,
         message_buf: &mut Vec<u8>,
-        input_sender: &mpsc::UnboundedSender<shared::IndexedState<shared::MouseDownEvent>>,
+        input_sender: &mpsc::UnboundedSender<shared::IndexedState<shared::AddBodyEvent>>,
         message: Option<(webrtc_unreliable::MessageType, std::net::SocketAddr)>,
     ) {
         if let Some((message_type, remote_addr)) = message {

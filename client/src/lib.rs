@@ -101,10 +101,14 @@ impl State {
     }
 
     #[wasm_bindgen]
-    pub fn mouse_down(&mut self, x: f32, y: f32, mass: f32) {
+    pub fn mouse_click_event(&mut self, down_x: f32, down_y: f32, mass: f32, up_x: f32, up_y: f32) {
+        // TODO: it this magic number is reasonable but it should really be tied to the simulation
+        const VEL_SCALE: f32 = 0.01;
+        let dx = (up_x - down_x) * VEL_SCALE;
+        let dy = (up_y - down_y) * VEL_SCALE;
         let input_event = shared::IndexedState {
             frame_index: self.inner.frame_index + shared::INPUT_BUFFER_FRAMES,
-            state: shared::MouseDownEvent::new(x, y, mass),
+            state: shared::AddBodyEvent::new_with_velocity(down_x, down_y, mass, dx, dy),
         };
         self.inner.input_buffer.push(input_event);
         match bincode::serialize(&shared::Send::InputState(input_event)) {
