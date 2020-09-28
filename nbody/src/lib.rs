@@ -73,6 +73,13 @@ fn lerp_vector(v0: Vector2D, v1: Vector2D, t: Float) -> Vector2D {
     Vector2D::new(lerp(v0.x, v1.x, t), lerp(v0.y, v1.y, t))
 }
 
+fn magnitude(v: Vector2D) -> Float {
+    let x = v.x.saturating_mul(v.x);
+    let y = v.y.saturating_mul(v.y);
+    let acc = x.saturating_add(y);
+    fixed_sqrt::FixedSqrt::sqrt(acc)
+}
+
 // TODO: Need a cbrt implementation for fixed point floats
 fn cbrt(v: Float) -> Float {
     let v: f32 = v.to_num();
@@ -97,13 +104,6 @@ impl Body {
     }
 
     pub fn force_from(&self, other: &Body) -> Vector2D {
-        fn magnitude(v: Vector2D) -> Float {
-            let x = v.x.saturating_mul(v.x);
-            let y = v.y.saturating_mul(v.y);
-            let acc = x.saturating_add(y);
-            fixed_sqrt::FixedSqrt::sqrt(acc)
-        }
-
         let diff: Vector2D = &other.position.coords - &self.position.coords;
         let r = magnitude(diff);
         if r == Float::from_bits(0) {
