@@ -22,7 +22,6 @@ uniform sampler2D tex0;
 uniform vec4 uColor;
 
 void main() {
-//    fragColor = Texel(tex0, vUV) * vColor * uColor;
-    fragColor = vec4(1., 1., 1., 1.);
+    fragColor = vColor * uColor;
 }
 #endif

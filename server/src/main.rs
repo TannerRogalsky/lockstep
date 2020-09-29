@@ -168,7 +168,7 @@ async fn main() {
                 graphics::glow::Context::from_loader_function(|name| window.get_proc_address(name))
             };
             let context = graphics::Context::new(glow_ctx);
-            let mut renderer = renderer::State::new(context, size.width, size.height).unwrap();
+            let mut renderer = renderer::Renderer::new(context, size.width, size.height).unwrap();
 
             event_loop.run(move |event, _, control_flow| {
                 use glutin::{event::*, event_loop::*};
@@ -187,10 +187,12 @@ async fn main() {
                             _ => {}
                         },
                         WindowEvent::Resized(new_inner_size) => {
-                            renderer.resize(*new_inner_size);
+                            let glutin::dpi::PhysicalSize { width, height } = *new_inner_size;
+                            renderer.resize(width, height);
                         }
                         WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                            renderer.resize(**new_inner_size);
+                            let glutin::dpi::PhysicalSize { width, height } = **new_inner_size;
+                            renderer.resize(width, height);
                         }
                         _ => {}
                     },

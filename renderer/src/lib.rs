@@ -2,11 +2,6 @@
 pub extern crate glutin;
 pub extern crate graphics;
 
-#[cfg(target_arch = "wasm32")]
-mod bindings;
-#[cfg(target_arch = "wasm32")]
-pub use bindings::*;
-
 #[derive(graphics::vertex::Vertex)]
 #[repr(C)]
 struct Vertex2D {
@@ -15,14 +10,14 @@ struct Vertex2D {
     uv: [f32; 2],
 }
 
-pub struct State {
+pub struct Renderer {
     context: graphics::Context,
     shader: graphics::shader::DynamicShader,
     dimensions: (u32, u32),
     circle: graphics::mesh::VertexMesh<Vertex2D>,
 }
 
-impl State {
+impl Renderer {
     pub fn new(
         mut context: graphics::Context,
         width: u32,
@@ -65,8 +60,8 @@ impl State {
         })
     }
 
-    pub fn resize(&mut self, size: glutin::dpi::PhysicalSize<u32>) {
-        self.dimensions = (size.width, size.height);
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.dimensions = (width, height);
     }
 
     pub fn render(&mut self, state: &shared::State) {
@@ -89,10 +84,13 @@ impl State {
                     .into(),
             ),
         );
-
         self.context.set_uniform_by_location(
             &self.shader.get_uniform_by_name("uView").unwrap().location,
             &graphics::shader::RawUniformValue::Mat4(nalgebra::Matrix4::<f32>::identity().into()),
+        );
+        self.context.set_uniform_by_location(
+            &self.shader.get_uniform_by_name("uColor").unwrap().location,
+            &graphics::shader::RawUniformValue::Vec4([1., 1., 1., 1.].into()),
         );
 
         for body in state.simulation.bodies.iter() {

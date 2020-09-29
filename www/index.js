@@ -1,4 +1,4 @@
-import { Connection, State } from 'client';
+import { Connection, State, Renderer } from 'client';
 
 async function run() {
   const peer = new RTCPeerConnection({
@@ -19,16 +19,21 @@ async function run() {
 
   const canvas = document.getElementById('canvas');
   const overlay = document.getElementById('overlay');
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('webgl');
+  const renderer = new Renderer(ctx, canvas.width, canvas.height);
   const overlay_ctx = overlay.getContext('2d');
 
   const resize = (canvas) => {
     canvas.width = document.body.clientWidth;
     canvas.height = document.body.clientHeight;
   };
-  canvas.addEventListener('resize', resize.bind(null, canvas));
+  canvas.addEventListener('resize', (event) => {
+    resize(canvas);
+    renderer.resize(canvas.width, canvas.height);
+  });
   overlay.addEventListener('resize', resize.bind(null, overlay));
   resize(canvas);
+  renderer.resize(canvas.width, canvas.height);
   resize(overlay);
 
   overlay.addEventListener('contextmenu', (event) => {
@@ -64,16 +69,9 @@ async function run() {
   let prev_t = performance.now();
   const loop = (t) => {
     state.step();
+    renderer.render(state);
+    
     const bodies = state.to_json();
-
-    for (const body of bodies) {
-      ctx.fillStyle = 'red';
-      ctx.beginPath();
-      ctx.ellipse(body.x, body.y, body.radius, body.radius, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'black';
-      ctx.stroke();
-    }
 
     let fontSize = 50;
     let textIndex = 0;
