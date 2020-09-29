@@ -17,8 +17,8 @@ pub fn main() {
 pub struct State {
     inner: shared::State,
     connection: Connection,
+    hash_buffer: HashBuffer,
     latency_buffer: LatencyBuffer,
-    hashes: Vec<(shared::FrameIndex, u64)>,
     /// The most recent frame index that we've received from the server.
     server_frame: shared::FrameIndex,
 }
@@ -43,16 +43,16 @@ impl State {
         Self {
             inner,
             connection,
+            hash_buffer: Default::default(),
             latency_buffer: LatencyBuffer::with_timeout(std::time::Duration::from_secs(1)),
-            hashes: Default::default(),
             server_frame,
         }
     }
 
     #[wasm_bindgen]
     pub fn step(&mut self) -> Result<(), JsValue> {
-        while let Some(input) = self.connection.recv() {
-            if let Ok(input) = bincode::deserialize::<shared::Recv>(&input) {
+        while let Some(buf) = self.connection.recv() {
+            if let Ok(input) = bincode::deserialize::<shared::Recv>(&buf) {
                 match input {
                     shared::Recv::Pong(frame_index) => {
                         self.latency_buffer.recv(frame_index);
@@ -62,19 +62,9 @@ impl State {
                         state: hash,
                     }) => {
                         self.server_frame = self.server_frame.max(frame_index);
-                        // TODO: clear out old hashes
-                        for (other_frame_index, other_hash) in self.hashes.iter() {
-                            if other_frame_index == &frame_index {
-                                if other_hash != &hash {
-                                    log::error!(
-                                        "Hash mismatch for frame {}. Expected {:x} but found {:x}",
-                                        frame_index,
-                                        hash,
-                                        other_hash
-                                    );
-                                }
-                                break;
-                            }
+                        // only check if it's possible that there's actually a frame there
+                        if let None = self.hash_buffer.take(frame_index, hash) {
+                            log::error!("Hash mismatch for frame {}", frame_index,);
                         }
                     }
                     shared::Recv::FullState(_) => unimplemented!(),
@@ -93,8 +83,8 @@ impl State {
             return Ok(());
         }
 
-        let hash_pair = (self.inner.frame_index, self.inner.hash());
-        self.hashes.push(hash_pair);
+        self.hash_buffer
+            .insert(self.inner.frame_index, self.inner.hash());
         self.inner.step();
         // TODO: if client is behind the server, run multiple steps
         Ok(())
@@ -165,6 +155,56 @@ struct RenderDataBody {
     y: f32,
     radius: f32,
     mass: f32,
+}
+
+struct HashBufferEntry(shared::FrameIndex, u64);
+
+#[derive(Default)]
+struct HashBuffer(Vec<HashBufferEntry>);
+
+impl HashBuffer {
+    pub fn insert(&mut self, frame_index: shared::FrameIndex, hash: u64) {
+        self.0.push(HashBufferEntry(frame_index, hash))
+    }
+
+    pub fn contains(&self, frame_index: shared::FrameIndex, hash: u64) -> bool {
+        self.0
+            .iter()
+            .find(|HashBufferEntry(i, h)| frame_index == *i && hash == *h)
+            .is_some()
+    }
+
+    pub fn take(
+        &mut self,
+        frame_index: shared::FrameIndex,
+        hash: u64,
+    ) -> Option<(shared::FrameIndex, u64)> {
+        match self
+            .0
+            .iter()
+            .position(|HashBufferEntry(i, h)| frame_index == *i && hash == *h)
+        {
+            None => None,
+            Some(index) => {
+                let entry = self.0.swap_remove(index);
+                Some((entry.0, entry.1))
+            }
+        }
+    }
+
+    /// exclusive search
+    pub fn unmatched_hashed(&self, cutoff: shared::FrameIndex) -> usize {
+        self.0.iter().fold(
+            0,
+            |acc, HashBufferEntry(index, _)| {
+                if *index < cutoff {
+                    acc + 1
+                } else {
+                    acc
+                }
+            },
+        )
+    }
 }
 
 #[cfg(test)]

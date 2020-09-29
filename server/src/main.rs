@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use tokio::sync::{mpsc, watch};
 use webrtc_unreliable::{Server as RtcServer, SessionEndpoint};
 
@@ -147,18 +148,30 @@ async fn main() {
         }
     });
 
-    async fn on_internal_message(rtc_server: &mut RtcServer, state: shared::State) {
-        let hash = state.hash();
-        let msg = shared::Recv::StateHash(shared::IndexedState {
-            frame_index: state.frame_index,
-            state: hash,
-        });
-        let msg = bincode::serialize(&msg).unwrap();
+    async fn broadcast_except(rtc_server: &mut RtcServer, message: &[u8], except: SocketAddr) {
+        let connected_clients = rtc_server.connected_clients().copied().collect::<Vec<_>>();
+        for connected_client in connected_clients {
+            if connected_client != except {
+                if let Err(err) = rtc_server
+                    .send(
+                        message,
+                        webrtc_unreliable::MessageType::Binary,
+                        &connected_client,
+                    )
+                    .await
+                {
+                    log::error!("{}", err);
+                }
+            }
+        }
+    }
+
+    async fn broadcast(rtc_server: &mut RtcServer, message: &[u8]) {
         let connected_clients = rtc_server.connected_clients().copied().collect::<Vec<_>>();
         for connected_client in connected_clients {
             if let Err(err) = rtc_server
                 .send(
-                    &msg,
+                    message,
                     webrtc_unreliable::MessageType::Binary,
                     &connected_client,
                 )
@@ -167,6 +180,16 @@ async fn main() {
                 log::error!("{}", err);
             }
         }
+    }
+
+    async fn on_internal_message(rtc_server: &mut RtcServer, state: shared::State) {
+        let hash = state.hash();
+        let msg = shared::Recv::StateHash(shared::IndexedState {
+            frame_index: state.frame_index,
+            state: hash,
+        });
+        let msg = bincode::serialize(&msg).unwrap();
+        broadcast(rtc_server, &msg).await;
     }
 
     async fn on_external_message(
@@ -186,6 +209,7 @@ async fn main() {
                     if let Err(err) = input_sender.send(input_state) {
                         log::error!("input send error: {}", err);
                     }
+                    broadcast_except(rtc_server, message_buf, remote_addr).await;
                     None
                 }
             };
