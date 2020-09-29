@@ -148,6 +148,68 @@ async fn main() {
         }
     });
 
+    #[cfg(feature = "renderer")]
+    std::thread::spawn({
+        let state_recver = state_recver.clone();
+        move || {
+            use glutin::platform::windows::EventLoopExtWindows;
+            use renderer::*;
+
+            let event_loop = glutin::event_loop::EventLoop::<()>::new_any_thread();
+            let size = glutin::dpi::PhysicalSize::new(720, 480);
+            let wb = glutin::window::WindowBuilder::new().with_inner_size(size);
+            let window = glutin::ContextBuilder::new()
+                .with_multisampling(16)
+                .build_windowed(wb, &event_loop)
+                .unwrap();
+            let window = unsafe { window.make_current().unwrap() };
+
+            let glow_ctx = unsafe {
+                graphics::glow::Context::from_loader_function(|name| window.get_proc_address(name))
+            };
+            let context = graphics::Context::new(glow_ctx);
+            let mut renderer = renderer::State::new(context, size.width, size.height).unwrap();
+
+            event_loop.run(move |event, _, control_flow| {
+                use glutin::{event::*, event_loop::*};
+                match event {
+                    Event::WindowEvent {
+                        ref event,
+                        window_id,
+                    } if window_id == window.window().id() => match event {
+                        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                        WindowEvent::KeyboardInput { input, .. } => match input {
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                                ..
+                            } => *control_flow = ControlFlow::Exit,
+                            _ => {}
+                        },
+                        WindowEvent::Resized(new_inner_size) => {
+                            renderer.resize(*new_inner_size);
+                        }
+                        WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                            renderer.resize(**new_inner_size);
+                        }
+                        _ => {}
+                    },
+                    Event::RedrawRequested(_) => {
+                        let state = state_recver.borrow();
+                        renderer.render(&*state);
+                        drop(state);
+                        window.swap_buffers().unwrap();
+                    }
+                    Event::MainEventsCleared => {
+                        // RedrawRequested will only trigger once, unless we manually request it.
+                        window.window().request_redraw();
+                    }
+                    _ => {}
+                }
+            });
+        }
+    });
+
     async fn broadcast_except(rtc_server: &mut RtcServer, message: &[u8], except: SocketAddr) {
         let connected_clients = rtc_server.connected_clients().copied().collect::<Vec<_>>();
         for connected_client in connected_clients {
