@@ -166,19 +166,12 @@ impl Simulation {
             if let Some(body2_index) = self.bodies.iter().position(|body| body.id == id2) {
                 let body2 = self.bodies.swap_remove(body2_index);
                 if let Some(body1) = self.bodies.iter_mut().find(|body| body.id == id1) {
-                    let (v0, v1, t) = if body1.mass > body2.mass {
-                        (body1.position, body2.position, body2.mass / body1.mass)
-                    } else {
-                        (body2.position, body1.position, body1.mass / body2.mass)
-                    };
-                    let t = t / Float::from_num(2);
-                    body1.position = lerp_point(v0, v1, t);
-                    let (v0, v1) = if body1.mass > body2.mass {
-                        (body1.velocity, body2.velocity)
-                    } else {
-                        (body2.velocity, body1.velocity)
-                    };
-                    body1.velocity = lerp_vector(v0, v1, t);
+                    body1.position = ((body1.position * body1.mass)
+                        + (body2.position * body2.mass).coords)
+                        / (body1.mass + body2.mass);
+                    body1.velocity = ((body1.velocity * body1.mass)
+                        + (body2.velocity * body2.mass))
+                        / (body1.mass + body2.mass);
                     body1.mass += body2.mass;
                 } else {
                     log::error!("Found only one side of a collision.")
