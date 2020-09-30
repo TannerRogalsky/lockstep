@@ -67,18 +67,6 @@ fn distance_squared(p1: &Point2D, p2: &Point2D) -> Float {
     dx.saturating_mul(dx).saturating_add(dy.saturating_mul(dy))
 }
 
-fn lerp(v0: Float, v1: Float, t: Float) -> Float {
-    (Float::from(1) - t) * v0 + t * v1
-}
-
-fn lerp_point(v0: Point2D, v1: Point2D, t: Float) -> Point2D {
-    Point2D::new(lerp(v0.x, v1.x, t), lerp(v0.y, v1.y, t))
-}
-
-fn lerp_vector(v0: Vector2D, v1: Vector2D, t: Float) -> Vector2D {
-    Vector2D::new(lerp(v0.x, v1.x, t), lerp(v0.y, v1.y, t))
-}
-
 fn magnitude(v: Vector2D) -> Float {
     let x = v.x.saturating_mul(v.x);
     let y = v.y.saturating_mul(v.y);
@@ -204,32 +192,6 @@ impl Simulation {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn lerp_test() {
-        {
-            let v0 = Float::from_num(0.);
-            let v1 = Float::from_num(1.);
-            let t = Float::from_num(0.5);
-            assert_eq!(lerp(v0, v1, t), t);
-        }
-
-        {
-            let v0 = Float::from_num(0.5);
-            let v1 = Float::from_num(1.);
-            let t = Float::from_num(0.5);
-            let half = Float::from_num(0.75);
-            assert_eq!(lerp(v0, v1, t), half);
-        }
-    }
-
-    #[test]
-    fn lerp_point_test() {
-        let p1 = Point2D::new(Float::from(0), Float::from(0));
-        let p2 = Point2D::new(Float::from(1), Float::from(1));
-        let half = Float::from_num(0.5);
-        assert_eq!(lerp_point(p1, p2, half), Point2D::new(half, half))
-    }
 
     #[test]
     fn force_from_test() {
