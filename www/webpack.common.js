@@ -44,6 +44,7 @@ module.exports = {
           path.resolve(__dirname, '..', 'shared'),
           path.resolve(__dirname, '..', 'nbody'),
         ],
+        extraArgs: "-- --features renderer",
     }),
   ],
 };

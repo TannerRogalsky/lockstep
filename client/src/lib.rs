@@ -3,6 +3,8 @@ use wasm_bindgen::prelude::*;
 
 mod connection;
 mod latency_buffer;
+
+#[cfg(feature = "renderer")]
 mod renderer;
 
 use connection::Connection;
