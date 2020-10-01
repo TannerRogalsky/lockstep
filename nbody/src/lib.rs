@@ -189,6 +189,9 @@ impl Simulation {
     }
 
     pub fn center_of_mass(&self) -> Point2D {
+        if self.bodies.is_empty() {
+            return Point2D::new(Float::from_bits(0), Float::from_bits(0));
+        }
         let (pos, mass) = self.bodies.iter().fold(
             (
                 Point2D::new(Float::from_bits(0), Float::from_bits(0)),
