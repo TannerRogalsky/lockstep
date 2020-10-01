@@ -148,7 +148,7 @@ async fn main() {
         }
     });
 
-    #[cfg(feature = "renderer")]
+    #[cfg(feature = "viz")]
     std::thread::spawn({
         let state_recver = state_recver.clone();
         move || {

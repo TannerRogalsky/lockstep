@@ -11,6 +11,7 @@ fn main() {
     let wb = WindowBuilder::new().with_inner_size(size);
     let window = glutin::ContextBuilder::new()
         .with_multisampling(16)
+        .with_double_buffer(Some(true))
         .with_vsync(true)
         .build_windowed(wb, &event_loop)
         .unwrap();
@@ -33,6 +34,15 @@ fn main() {
         let mut body =
             shared::nbody::Body::new_lossy(size.width as f32 / 2., size.height as f32 / 4., 10.);
         body.velocity.x = shared::nbody::Float::from_num(3);
+        body
+    });
+    state.simulation.add_body({
+        let mut body = shared::nbody::Body::new_lossy(
+            size.width as f32 / 2.,
+            size.height as f32 / 2. + size.height as f32 / 4.,
+            10.,
+        );
+        body.velocity.x = shared::nbody::Float::from_num(-3);
         body
     });
 

@@ -1,5 +1,3 @@
-#[cfg(not(target_arch = "wasm32"))]
-pub extern crate glutin;
 pub extern crate graphics;
 
 #[derive(graphics::vertex::Vertex)]
