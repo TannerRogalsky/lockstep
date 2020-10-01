@@ -1,12 +1,12 @@
 pub use fixed::types::I50F14 as Float;
 use serde::{Deserialize, Serialize};
 
-type Point2D = nalgebra::Point2<Float>;
-type Vector2D = nalgebra::Vector2<Float>;
+pub type Point2D = nalgebra::Point2<Float>;
+pub type Vector2D = nalgebra::Vector2<Float>;
 
 fixed::const_fixed_from_int! {
     const DENSITY: Float = 1;
-    const TICK: Float = 1;
+    // const TICK: Float = 1;
 }
 static ID_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
@@ -187,6 +187,22 @@ impl Simulation {
             body.position += body.velocity * TICK;
         }
     }
+
+    pub fn center_of_mass(&self) -> Point2D {
+        let (pos, mass) = self.bodies.iter().fold(
+            (
+                Point2D::new(Float::from_bits(0), Float::from_bits(0)),
+                Float::from_bits(0),
+            ),
+            |(acc_pos, acc_mass), body| {
+                (
+                    acc_pos + (body.position * body.mass).coords,
+                    acc_mass + body.mass,
+                )
+            },
+        );
+        pos / mass
+    }
 }
 
 #[cfg(test)]
@@ -324,5 +340,20 @@ mod tests {
         let b3 = sim.bodies.get(0).unwrap();
         assert!(b1.position.x < b3.position.x);
         assert!(b2.position.x > b3.position.x);
+    }
+
+    #[test]
+    fn center_of_mass() {
+        let b1 = Body::new_lossy(0., 0., 1.);
+        let b2 = Body::new_lossy(10., 0., 1.);
+
+        let mut sim = Simulation::new();
+        sim.add_body(b1);
+        sim.add_body(b2);
+
+        assert_eq!(
+            sim.center_of_mass(),
+            Point2D::new(Float::from_num(5), Float::from_num(0))
+        );
     }
 }
