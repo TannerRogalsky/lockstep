@@ -1,4 +1,4 @@
-pub use fixed::types::I50F14 as Float;
+pub use fixed::types::I32F32 as Float;
 use serde::{Deserialize, Serialize};
 
 pub type Point2D = nalgebra::Point2<Float>;
@@ -6,7 +6,7 @@ pub type Vector2D = nalgebra::Vector2<Float>;
 
 fixed::const_fixed_from_int! {
     const DENSITY: Float = 1;
-    // const TICK: Float = 1;
+    const TICK: Float = 1;
 }
 static ID_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 

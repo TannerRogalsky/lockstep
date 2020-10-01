@@ -7,7 +7,70 @@ pub extern crate graphics;
 struct Vertex2D {
     position: [f32; 2],
     color: [f32; 4],
-    uv: [f32; 2],
+}
+
+fn to_num_point(p: shared::nbody::Point2D) -> nalgebra::Point2<f32> {
+    nalgebra::Point2::new(p.x.to_num(), p.y.to_num())
+}
+
+fn to_num_vec(v: shared::nbody::Vector2D) -> nalgebra::Vector2<f32> {
+    nalgebra::Vector2::new(v.x.to_num(), v.y.to_num())
+}
+
+struct LineBuffer {
+    inner: graphics::mesh::MappedVertexMesh<Vertex2D>,
+    offset: usize,
+}
+
+impl LineBuffer {
+    pub fn new(context: &mut graphics::Context) -> Result<Self, graphics::GraphicsError> {
+        let inner = graphics::mesh::MappedVertexMesh::new(context, 1000)?;
+        Ok(Self { inner, offset: 0 })
+    }
+
+    pub fn add(&mut self, body: &shared::nbody::Body) {
+        const VEC_SCALE: f32 = 100.;
+        let origin = to_num_point(body.position);
+        let accel = origin + to_num_vec(body.acceleration) * VEC_SCALE;
+        let vel = origin + to_num_vec(body.velocity) * VEC_SCALE;
+
+        let green = [0., 1., 0., 1.];
+        let red = [1., 0., 0., 1.];
+
+        let vertices = [
+            Vertex2D {
+                position: [origin.x, origin.y],
+                color: green,
+            },
+            Vertex2D {
+                position: [accel.x, accel.y],
+                color: green,
+            },
+            Vertex2D {
+                position: [origin.x, origin.y],
+                color: red,
+            },
+            Vertex2D {
+                position: [vel.x, vel.y],
+                color: red,
+            },
+        ];
+
+        self.inner.set_vertices(&vertices, self.offset);
+        self.offset += 4;
+    }
+
+    pub fn unmap(
+        &mut self,
+        context: &mut graphics::Context,
+    ) -> (
+        std::ops::Range<usize>,
+        &graphics::mesh::VertexMesh<Vertex2D>,
+    ) {
+        let draw_range = 0..self.offset;
+        self.offset = 0;
+        (draw_range, self.inner.unmap(context))
+    }
 }
 
 pub struct Renderer {
@@ -15,6 +78,8 @@ pub struct Renderer {
     shader: graphics::shader::DynamicShader,
     dimensions: (u32, u32),
     circle: graphics::mesh::VertexMesh<Vertex2D>,
+    vectors: LineBuffer,
+    camera_position: nalgebra::Point2<f32>,
 }
 
 impl Renderer {
@@ -42,22 +107,27 @@ impl Renderer {
                     Vertex2D {
                         position: [x, y],
                         color: [1., 1., 1., 1.],
-                        uv: [0.5, 0.5],
                     }
                 })
                 .collect::<Box<_>>();
 
-            let mut mesh = graphics::mesh::VertexMesh::with_data(&mut context, &vertices)?;
-            mesh.set_draw_mode(graphics::DrawMode::TriangleFan);
-            mesh
+            graphics::mesh::VertexMesh::with_data(&mut context, &vertices)?
         };
+
+        let vectors = LineBuffer::new(&mut context)?;
 
         Ok(Self {
             context,
             shader,
             dimensions,
             circle,
+            vectors,
+            camera_position: nalgebra::Point2::new(0., 0.),
         })
+    }
+
+    pub fn camera_position(&self) -> &nalgebra::Point2<f32> {
+        &self.camera_position
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -65,7 +135,7 @@ impl Renderer {
     }
 
     pub fn render(&mut self, state: &shared::State) {
-        self.context.clear_color(1., 0., 0., 1.);
+        self.context.clear_color(0., 0., 0., 1.);
         self.context.clear();
 
         let (width, height) = self.dimensions;
@@ -86,7 +156,19 @@ impl Renderer {
         );
         self.context.set_uniform_by_location(
             &self.shader.get_uniform_by_name("uView").unwrap().location,
-            &graphics::shader::RawUniformValue::Mat4(nalgebra::Matrix4::<f32>::identity().into()),
+            &graphics::shader::RawUniformValue::Mat4(
+                {
+                    let center = to_num_point(state.simulation.center_of_mass());
+                    self.camera_position =
+                        center - nalgebra::Vector2::new(width as f32 / 2., height as f32 / 2.);
+                    nalgebra::Matrix4::new_translation(&nalgebra::Vector3::new(
+                        -self.camera_position.x,
+                        -self.camera_position.y,
+                        0.,
+                    ))
+                }
+                .into(),
+            ),
         );
         self.context.set_uniform_by_location(
             &self.shader.get_uniform_by_name("uColor").unwrap().location,
@@ -94,6 +176,7 @@ impl Renderer {
         );
 
         for body in state.simulation.bodies.iter() {
+            self.vectors.add(body);
             let translation = nalgebra::Matrix4::new_translation(&nalgebra::Vector3::new(
                 body.position.x.to_num(),
                 body.position.y.to_num(),
@@ -110,13 +193,30 @@ impl Renderer {
                 &self.shader,
                 graphics::Geometry {
                     mesh: &self.circle,
-                    draw_range: 0..1,
+                    draw_range: self.circle.draw_range(),
                     draw_mode: graphics::DrawMode::TriangleFan,
                     instance_count: 1,
                 },
                 graphics::PipelineSettings::default(),
             )
         }
+
+        self.context.set_uniform_by_location(
+            &self.shader.get_uniform_by_name("uModel").unwrap().location,
+            &graphics::shader::RawUniformValue::Mat4(nalgebra::Matrix4::<f32>::identity().into()),
+        );
+        let (draw_range, mesh) = self.vectors.unmap(&mut self.context);
+        graphics::Renderer::draw(
+            &mut self.context,
+            &self.shader,
+            graphics::Geometry {
+                mesh,
+                draw_range,
+                draw_mode: graphics::DrawMode::Lines,
+                instance_count: 1,
+            },
+            graphics::PipelineSettings::default(),
+        )
     }
 }
 

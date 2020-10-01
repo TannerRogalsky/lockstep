@@ -11,6 +11,7 @@ fn main() {
     let wb = WindowBuilder::new().with_inner_size(size);
     let window = glutin::ContextBuilder::new()
         .with_multisampling(16)
+        .with_vsync(true)
         .build_windowed(wb, &event_loop)
         .unwrap();
     let window = unsafe { window.make_current().unwrap() };
@@ -22,12 +23,22 @@ fn main() {
     let mut renderer = renderer::Renderer::new(context, size.width, size.height).unwrap();
 
     let mut state = shared::State::new();
-    state
-        .simulation
-        .add_body(shared::nbody::Body::new_lossy(0., 0., 100.));
-    state
-        .simulation
-        .add_body(shared::nbody::Body::new_lossy(300., 300., 100.));
+
+    state.simulation.add_body(shared::nbody::Body::new_lossy(
+        size.width as f32 / 2.,
+        size.height as f32 / 2.,
+        10000.,
+    ));
+    state.simulation.add_body({
+        let mut body =
+            shared::nbody::Body::new_lossy(size.width as f32 / 2., size.height as f32 / 4., 10.);
+        body.velocity.x = shared::nbody::Float::from_num(3);
+        body
+    });
+
+    let mut mouse_down = None;
+    let mut mouse_position = glutin::dpi::PhysicalPosition::new(0., 0.);
+    let mut mass = 10u32;
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -39,9 +50,45 @@ fn main() {
                 WindowEvent::KeyboardInput { input, .. } => match input {
                     KeyboardInput {
                         state: ElementState::Pressed,
-                        virtual_keycode: Some(VirtualKeyCode::Escape),
+                        virtual_keycode: Some(keycode),
                         ..
-                    } => *control_flow = ControlFlow::Exit,
+                    } => match keycode {
+                        VirtualKeyCode::Escape => *control_flow = ControlFlow::Exit,
+                        VirtualKeyCode::Up => mass = 1_000_000.min(mass * 10),
+                        VirtualKeyCode::Down => mass = 10.max(mass / 10),
+                        VirtualKeyCode::N => {
+                            state.step();
+                        }
+                        _ => {}
+                    },
+                    _ => {}
+                },
+                WindowEvent::CursorMoved { position, .. } => mouse_position = *position,
+                WindowEvent::MouseInput {
+                    state: mouse_state,
+                    button,
+                    ..
+                } => match (mouse_state, button) {
+                    (ElementState::Pressed, MouseButton::Left) => {
+                        mouse_down = Some(mouse_position);
+                    }
+                    (ElementState::Released, MouseButton::Left) => {
+                        let offset = renderer.camera_position();
+                        let mut body = shared::nbody::Body::new_lossy(
+                            offset.x + mouse_position.x as f32,
+                            offset.y + mouse_position.y as f32,
+                            mass as _,
+                        );
+                        if let Some(mouse_down) = mouse_down {
+                            const VEL_SCALE: f64 = 0.01;
+                            let dx = (mouse_position.x - mouse_down.x) * VEL_SCALE;
+                            let dy = (mouse_position.y - mouse_down.y) * VEL_SCALE;
+                            body.velocity.x = shared::nbody::Float::from_num(dx);
+                            body.velocity.y = shared::nbody::Float::from_num(dy);
+                        }
+                        state.simulation.add_body(body);
+                        mouse_down = None;
+                    }
                     _ => {}
                 },
                 WindowEvent::Resized(new_inner_size) => {
