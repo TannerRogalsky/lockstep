@@ -7,20 +7,25 @@ use glutin::{
 fn main() {
     env_logger::init();
     let event_loop = EventLoop::new();
-    let size = glutin::dpi::PhysicalSize::new(720, 480);
-    let wb = WindowBuilder::new().with_inner_size(size);
+    let wb = WindowBuilder::new();
     let window = glutin::ContextBuilder::new()
         .with_multisampling(16)
         .with_double_buffer(Some(true))
         .with_vsync(true)
         .build_windowed(wb, &event_loop)
         .unwrap();
+    window
+        .window()
+        .set_fullscreen(Some(glutin::window::Fullscreen::Borderless(
+            window.window().primary_monitor(),
+        )));
     let window = unsafe { window.make_current().unwrap() };
 
     let glow_ctx = unsafe {
         graphics::glow::Context::from_loader_function(|name| window.get_proc_address(name))
     };
     let context = graphics::Context::new(glow_ctx);
+    let size = window.window().inner_size();
     let mut renderer = renderer::Renderer::new(context, size.width, size.height).unwrap();
 
     let mut state = shared::State::new();
@@ -31,15 +36,18 @@ fn main() {
         10000.,
     ));
     state.simulation.add_body({
-        let mut body =
-            shared::nbody::Body::new_lossy(size.width as f32 / 2., size.height as f32 / 4., 10.);
+        let mut body = shared::nbody::Body::new_lossy(
+            size.width as f32 / 2.,
+            size.height as f32 / 2. - 100.,
+            10.,
+        );
         body.velocity.x = shared::nbody::Float::from_num(3);
         body
     });
     state.simulation.add_body({
         let mut body = shared::nbody::Body::new_lossy(
             size.width as f32 / 2.,
-            size.height as f32 / 2. + size.height as f32 / 4.,
+            size.height as f32 / 2. + 100.,
             10.,
         );
         body.velocity.x = shared::nbody::Float::from_num(-3);
@@ -49,6 +57,9 @@ fn main() {
     let mut mouse_down = None;
     let mut mouse_position = glutin::dpi::PhysicalPosition::new(0., 0.);
     let mut mass = 10u32;
+
+    use rand::prelude::*;
+    let mut rng = thread_rng();
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -66,8 +77,17 @@ fn main() {
                         VirtualKeyCode::Escape => *control_flow = ControlFlow::Exit,
                         VirtualKeyCode::Up => mass = 1_000_000.min(mass * 10),
                         VirtualKeyCode::Down => mass = 10.max(mass / 10),
-                        VirtualKeyCode::N => {
-                            state.step();
+                        VirtualKeyCode::N => state.step(),
+                        VirtualKeyCode::R => state.simulation.bodies.clear(),
+                        VirtualKeyCode::B => {
+                            let offset = renderer.camera_position();
+                            let x = rng.gen_range(offset.x, offset.x + size.width as f32);
+                            let y = rng.gen_range(offset.y, offset.y + size.height as f32);
+                            state.simulation.add_body(shared::nbody::Body::new_lossy(
+                                x,
+                                y,
+                                mass as f32,
+                            ));
                         }
                         _ => {}
                     },
