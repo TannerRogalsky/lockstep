@@ -27,4 +27,10 @@ impl Renderer {
     pub fn render(&mut self, state: &super::State) {
         self.0.render(&state.inner)
     }
+
+    #[wasm_bindgen]
+    pub fn transform_point(&self, x: f32, y: f32) -> Box<[f32]> {
+        let offset = self.0.camera_position();
+        Box::new([offset.x + x, offset.y + y])
+    }
 }

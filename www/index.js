@@ -10,7 +10,6 @@ async function run() {
   if (!channel) {
     return;
   }
-  console.log(peer.sctp);
 
   const state_buffer = await fetch('state')
     	.then((r) => r.arrayBuffer())
@@ -61,7 +60,9 @@ async function run() {
 
     if (event.button == 0) {
       let mass = parseInt(massOptions.selectedOptions[0].value);
-      state.mouse_click_event(mouseDown[0], mouseDown[1], mass, event.x, event.y);
+      let down = renderer.transform_point(mouseDown[0], mouseDown[1]);
+      let up = renderer.transform_point(event.x, event.y);
+      state.mouse_click_event(down[0], down[1], mass, up[0], up[1]);
       mouseDown = null;
     }
   })
@@ -73,16 +74,18 @@ async function run() {
     
     const bodies = state.to_json();
 
-    let fontSize = 50;
+    let fontSize = 36;
     let textIndex = 0;
     overlay_ctx.clearRect(0, 0, canvas.width, canvas.height);
-    overlay_ctx.fillStyle = 'black';
-    overlay_ctx.font = `${50}px serif`;
+    overlay_ctx.fillStyle = 'white';
+    overlay_ctx.font = `${fontSize}px serif`;
 
     overlay_ctx.fillText(`FPS: ${state.latency_secs()}`, 0, (++textIndex * fontSize));
     overlay_ctx.fillText(`FRAME: ${state.current_frame()}`, 0, (++textIndex * fontSize));
     overlay_ctx.fillText(`TARGET: ${state.target_frame()}`, 0, (++textIndex * fontSize));
     overlay_ctx.fillText(`PKT LOSS: ${state.packet_loss()}`, 0, (++textIndex * fontSize));
+    overlay_ctx.fillText(`HASH SUC: ${state.hash_successes()}`, 0, (++textIndex * fontSize));
+    overlay_ctx.fillText(`HASH FAIL: ${state.hash_failures()}`, 0, (++textIndex * fontSize));
     overlay_ctx.fillText(`BODIES: ${bodies.length}`, 0, (++textIndex * fontSize));
 
     if (mouseDown) {

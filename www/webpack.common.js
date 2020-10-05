@@ -43,6 +43,7 @@ module.exports = {
         watchDirectories: [
           path.resolve(__dirname, '..', 'shared'),
           path.resolve(__dirname, '..', 'nbody'),
+          path.resolve(__dirname, '..', 'renderer'),
         ],
         extraArgs: "-- --features renderer",
     }),

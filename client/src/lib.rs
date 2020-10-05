@@ -24,6 +24,8 @@ pub struct State {
     latency_buffer: LatencyBuffer,
     /// The most recent frame index that we've received from the server.
     server_frame: shared::FrameIndex,
+    hash_successes: u32,
+    hash_failures: u32,
 }
 
 #[wasm_bindgen]
@@ -49,6 +51,8 @@ impl State {
             hash_buffer: Default::default(),
             latency_buffer: LatencyBuffer::with_timeout(std::time::Duration::from_secs(1)),
             server_frame,
+            hash_successes: 0,
+            hash_failures: 0,
         }
     }
 
@@ -65,10 +69,7 @@ impl State {
                         state: hash,
                     }) => {
                         self.server_frame = self.server_frame.max(frame_index);
-                        // only check if it's possible that there's actually a frame there
-                        if let None = self.hash_buffer.take(frame_index, hash) {
-                            log::error!("Hash mismatch for frame {}", frame_index,);
-                        }
+                        self.hash_buffer.insert(frame_index, hash);
                     }
                     shared::Recv::FullState(_) => unimplemented!(),
                     shared::Recv::InputState(input) => self.inner.input_buffer.push(input),
@@ -86,9 +87,16 @@ impl State {
             return Ok(());
         }
 
-        self.hash_buffer
-            .insert(self.inner.frame_index, self.inner.hash());
-        self.inner.step();
+        while self.inner.frame_index < self.server_frame {
+            self.inner.step();
+            let frame = self.inner.frame_index;
+            let hash = self.inner.hash();
+            log::trace!("{}, {:?}", hash, self.inner);
+            match self.hash_buffer.take(frame, hash) {
+                None => self.hash_failures += 1,
+                Some(_) => self.hash_successes += 1,
+            }
+        }
         // TODO: if client is behind the server, run multiple steps
         Ok(())
     }
@@ -99,9 +107,11 @@ impl State {
         const VEL_SCALE: f32 = 0.01;
         let dx = (up_x - down_x) * VEL_SCALE;
         let dy = (up_y - down_y) * VEL_SCALE;
+        // TODO: should this frame index be based off our guess of the server's frame index?
+        let event = shared::AddBodyEvent::new_with_velocity(down_x, down_y, mass, dx, dy);
         let input_event = shared::IndexedState {
             frame_index: self.inner.frame_index + shared::INPUT_BUFFER_FRAMES,
-            state: shared::AddBodyEvent::new_with_velocity(down_x, down_y, mass, dx, dy),
+            state: event,
         };
         self.inner.input_buffer.push(input_event);
         match bincode::serialize(&shared::Send::InputState(input_event)) {
@@ -150,6 +160,16 @@ impl State {
     pub fn target_frame(&self) -> shared::FrameIndex {
         self.server_frame + self.latency_buffer.average_latency().as_millis() as u32 / 60
     }
+
+    #[wasm_bindgen]
+    pub fn hash_successes(&self) -> u32 {
+        self.hash_successes
+    }
+
+    #[wasm_bindgen]
+    pub fn hash_failures(&self) -> u32 {
+        self.hash_failures
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -175,6 +195,12 @@ impl HashBuffer {
             .iter()
             .find(|HashBufferEntry(i, h)| frame_index == *i && hash == *h)
             .is_some()
+    }
+
+    pub fn by_frame(&self, frame_index: shared::FrameIndex) -> impl Iterator<Item = &u64> {
+        self.0
+            .iter()
+            .filter_map(move |HashBufferEntry(i, h)| if frame_index == *i { Some(h) } else { None })
     }
 
     pub fn take(

@@ -47,9 +47,24 @@ impl AppState {
         input_recver: mpsc::UnboundedReceiver<shared::IndexedState<shared::AddBodyEvent>>,
     ) -> (Self, watch::Receiver<shared::State>) {
         let (state_sender, recver) = watch::channel(Default::default());
+
+        use shared::nbody::{Body, Float};
+        let mut current = shared::State::new();
+        current.simulation.add_body(Body::new_lossy(0., 0., 10000.));
+        current.simulation.add_body({
+            let mut body = Body::new_lossy(0., -100., 10.);
+            body.velocity.x = Float::from_num(3);
+            body
+        });
+        current.simulation.add_body({
+            let mut body = Body::new_lossy(0., 100., 10.);
+            body.velocity.x = Float::from_num(-3);
+            body
+        });
+
         (
             Self {
-                current: Default::default(),
+                current,
                 input_recver,
                 state_sender,
             },
@@ -59,6 +74,7 @@ impl AppState {
 
     pub fn step(&mut self) -> Result<(), watch::error::SendError<shared::State>> {
         while let Ok(input) = self.input_recver.try_recv() {
+            log::debug!("EVENT: {:?}", input.state);
             self.current.input_buffer.push(input);
         }
         self.current.step();
@@ -252,6 +268,7 @@ async fn main() {
             frame_index: state.frame_index,
             state: hash,
         });
+        log::trace!("{}, {:?}", hash, state);
         let msg = bincode::serialize(&msg).unwrap();
         broadcast(rtc_server, &msg).await;
     }

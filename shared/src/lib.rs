@@ -95,6 +95,7 @@ impl State {
     }
 
     fn handle_event(&mut self, event: AddBodyEvent) {
+        log::trace!("handle_event @ {}: {:?}", self.frame_index, event);
         let mut body = nbody::Body::new(event.position_x, event.position_y, event.mass);
         body.velocity.x = event.velocity_x;
         body.velocity.y = event.velocity_y;
