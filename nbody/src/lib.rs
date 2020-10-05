@@ -13,9 +13,14 @@ static ID_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsi
 fn zero_vec() -> Vector2D {
     Vector2D::new(Float::from_bits(0), Float::from_bits(0))
 }
+fn new_id() -> usize {
+    ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+}
 
 #[derive(Copy, Clone, Debug, Eq, Serialize, Deserialize)]
 pub struct Body {
+    /// used for internal comparisons only. unique on a single client but not globally.
+    #[serde(skip, default = "new_id")]
     id: usize,
     pub position: Point2D,
     pub velocity: Vector2D,
@@ -26,7 +31,7 @@ pub struct Body {
 impl Body {
     pub fn new(x: Float, y: Float, mass: Float) -> Self {
         Self {
-            id: ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+            id: new_id(),
             position: Point2D::new(x, y),
             velocity: Vector2D::new(Float::from_bits(0), Float::from_bits(0)),
             acceleration: Vector2D::new(Float::from_bits(0), Float::from_bits(0)),
