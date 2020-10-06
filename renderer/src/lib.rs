@@ -1,11 +1,6 @@
 pub extern crate graphics;
 
-#[derive(graphics::vertex::Vertex)]
-#[repr(C)]
-struct Vertex2D {
-    position: [f32; 2],
-    color: [f32; 4],
-}
+mod line_buffer;
 
 #[derive(graphics::vertex::Vertex)]
 #[repr(C)]
@@ -25,75 +20,13 @@ fn to_num_point(p: shared::nbody::Point2D) -> nalgebra::Point2<f32> {
     nalgebra::Point2::new(p.x.to_num(), p.y.to_num())
 }
 
-fn to_num_vec(v: shared::nbody::Vector2D) -> nalgebra::Vector2<f32> {
-    nalgebra::Vector2::new(v.x.to_num(), v.y.to_num())
-}
-
-struct LineBuffer {
-    inner: graphics::mesh::MappedVertexMesh<Vertex2D>,
-    offset: usize,
-}
-
-impl LineBuffer {
-    pub fn new(context: &mut graphics::Context) -> Result<Self, graphics::GraphicsError> {
-        let inner = graphics::mesh::MappedVertexMesh::new(context, 1000)?;
-        Ok(Self { inner, offset: 0 })
-    }
-
-    pub fn add(&mut self, body: &shared::nbody::Body) {
-        const VEC_SCALE: f32 = 100.;
-        let origin = to_num_point(body.position);
-        let accel = origin + to_num_vec(body.acceleration) * VEC_SCALE;
-        let vel = origin + to_num_vec(body.velocity) * VEC_SCALE;
-
-        let green = [0., 1., 0., 1.];
-        let red = [1., 0., 0., 1.];
-
-        let vertices = [
-            Vertex2D {
-                position: [origin.x, origin.y],
-                color: green,
-            },
-            Vertex2D {
-                position: [accel.x, accel.y],
-                color: green,
-            },
-            Vertex2D {
-                position: [origin.x, origin.y],
-                color: red,
-            },
-            Vertex2D {
-                position: [vel.x, vel.y],
-                color: red,
-            },
-        ];
-
-        self.inner.set_vertices(&vertices, self.offset);
-        self.offset += 4;
-    }
-
-    pub fn unmap(
-        &mut self,
-        context: &mut graphics::Context,
-    ) -> graphics::Geometry<&graphics::mesh::VertexMesh<Vertex2D>> {
-        let draw_range = 0..self.offset;
-        self.offset = 0;
-        graphics::Geometry {
-            mesh: self.inner.unmap(context),
-            draw_range,
-            draw_mode: graphics::DrawMode::Lines,
-            instance_count: 1,
-        }
-    }
-}
-
 pub struct Renderer {
     context: graphics::Context,
     shader: graphics::shader::DynamicShader,
     instanced_shader: graphics::shader::DynamicShader,
     dimensions: (u32, u32),
     circle: graphics::mesh::VertexMesh<Position>,
-    vectors: LineBuffer,
+    vectors: line_buffer::LineBuffer,
     camera_position: nalgebra::Point2<f32>,
     instances: graphics::mesh::MappedVertexMesh<Instance>,
 }
@@ -126,9 +59,7 @@ impl Renderer {
 
                     let (x, y) = phi.sin_cos();
 
-                    Position {
-                        position: [x, y]
-                    }
+                    Position { position: [x, y] }
                 })
                 .collect::<Box<_>>();
 
@@ -137,7 +68,7 @@ impl Renderer {
 
         let instances = graphics::mesh::MappedVertexMesh::new(&mut context, 10000)?;
 
-        let vectors = LineBuffer::new(&mut context)?;
+        let vectors = line_buffer::LineBuffer::new(&mut context)?;
 
         Ok(Self {
             context,
@@ -168,18 +99,14 @@ impl Renderer {
         self.camera_position = to_num_point(state.simulation.center_of_mass())
             - nalgebra::Vector2::new(width as f32 / 2., height as f32 / 2.);
 
-        set_uniforms(
-            &mut self.context,
-            &self.instanced_shader,
-            self.dimensions,
-            &self.camera_position,
-        );
-        set_uniforms(
-            &mut self.context,
-            &self.shader,
-            self.dimensions,
-            &self.camera_position,
-        );
+        for shader in &[&self.instanced_shader, &self.shader] {
+            set_uniforms(
+                &mut self.context,
+                *shader,
+                self.dimensions,
+                &self.camera_position,
+            );
+        }
 
         for (index, body) in state.simulation.bodies.iter().enumerate() {
             self.instances.set_vertices(
