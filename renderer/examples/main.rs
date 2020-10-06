@@ -7,18 +7,18 @@ use glutin::{
 fn main() {
     env_logger::init();
     let event_loop = EventLoop::new();
-    let wb = WindowBuilder::new();
+    let wb = WindowBuilder::new().with_inner_size(glutin::dpi::PhysicalSize::new(1280, 720));
     let window = glutin::ContextBuilder::new()
         .with_multisampling(16)
         .with_double_buffer(Some(true))
         .with_vsync(true)
         .build_windowed(wb, &event_loop)
         .unwrap();
-    window
-        .window()
-        .set_fullscreen(Some(glutin::window::Fullscreen::Borderless(
-            window.window().primary_monitor(),
-        )));
+    // window
+    //     .window()
+    //     .set_fullscreen(Some(glutin::window::Fullscreen::Borderless(
+    //         window.window().primary_monitor(),
+    //     )));
     let window = unsafe { window.make_current().unwrap() };
 
     let glow_ctx = unsafe {
