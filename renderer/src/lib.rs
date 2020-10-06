@@ -61,13 +61,15 @@ impl LineBuffer {
     pub fn unmap(
         &mut self,
         context: &mut graphics::Context,
-    ) -> (
-        std::ops::Range<usize>,
-        &graphics::mesh::VertexMesh<Vertex2D>,
-    ) {
+    ) -> graphics::Geometry<&graphics::mesh::VertexMesh<Vertex2D>> {
         let draw_range = 0..self.offset;
         self.offset = 0;
-        (draw_range, self.inner.unmap(context))
+        graphics::Geometry {
+            mesh: self.inner.unmap(context),
+            draw_range,
+            draw_mode: graphics::DrawMode::Lines,
+            instance_count: 1,
+        }
     }
 }
 
@@ -203,16 +205,11 @@ impl Renderer {
             &self.shader.get_uniform_by_name("uModel").unwrap().location,
             &graphics::shader::RawUniformValue::Mat4(nalgebra::Matrix4::<f32>::identity().into()),
         );
-        let (draw_range, mesh) = self.vectors.unmap(&mut self.context);
+        let geometry = self.vectors.unmap(&mut self.context);
         graphics::Renderer::draw(
             &mut self.context,
             &self.shader,
-            graphics::Geometry {
-                mesh,
-                draw_range,
-                draw_mode: graphics::DrawMode::Lines,
-                instance_count: 1,
-            },
+            &geometry,
             graphics::PipelineSettings::default(),
         )
     }
