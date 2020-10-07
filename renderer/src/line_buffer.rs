@@ -1,4 +1,4 @@
-#[derive(graphics::vertex::Vertex)]
+#[derive(solstice::vertex::Vertex)]
 #[repr(C)]
 pub struct Vertex2D {
     position: [f32; 2],
@@ -10,13 +10,13 @@ fn to_num_vec(v: shared::nbody::Vector2D) -> nalgebra::Vector2<f32> {
 }
 
 pub struct LineBuffer {
-    inner: graphics::mesh::MappedVertexMesh<Vertex2D>,
+    inner: solstice::mesh::MappedVertexMesh<Vertex2D>,
     offset: usize,
 }
 
 impl LineBuffer {
-    pub fn new(context: &mut graphics::Context) -> Result<Self, graphics::GraphicsError> {
-        let inner = graphics::mesh::MappedVertexMesh::new(context, 1000)?;
+    pub fn new(context: &mut solstice::Context) -> Result<Self, solstice::GraphicsError> {
+        let inner = solstice::mesh::MappedVertexMesh::new(context, 1000)?;
         Ok(Self { inner, offset: 0 })
     }
 
@@ -54,14 +54,14 @@ impl LineBuffer {
 
     pub fn unmap(
         &mut self,
-        context: &mut graphics::Context,
-    ) -> graphics::Geometry<&graphics::mesh::VertexMesh<Vertex2D>> {
+        context: &mut solstice::Context,
+    ) -> solstice::Geometry<&solstice::mesh::VertexMesh<Vertex2D>> {
         let draw_range = 0..self.offset;
         self.offset = 0;
-        graphics::Geometry {
+        solstice::Geometry {
             mesh: self.inner.unmap(context),
             draw_range,
-            draw_mode: graphics::DrawMode::Lines,
+            draw_mode: solstice::DrawMode::Lines,
             instance_count: 1,
         }
     }

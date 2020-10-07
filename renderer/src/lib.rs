@@ -1,14 +1,14 @@
-pub extern crate graphics;
+pub extern crate solstice;
 
 mod line_buffer;
 
-#[derive(graphics::vertex::Vertex)]
+#[derive(solstice::vertex::Vertex)]
 #[repr(C)]
 struct Position {
     position: [f32; 2],
 }
 
-#[derive(graphics::vertex::Vertex)]
+#[derive(solstice::vertex::Vertex)]
 #[repr(C)]
 struct Instance {
     color: [f32; 4],
@@ -21,31 +21,31 @@ fn to_num_point(p: shared::nbody::Point2D) -> nalgebra::Point2<f32> {
 }
 
 pub struct Renderer {
-    context: graphics::Context,
-    shader: graphics::shader::DynamicShader,
-    instanced_shader: graphics::shader::DynamicShader,
+    context: solstice::Context,
+    shader: solstice::shader::DynamicShader,
+    instanced_shader: solstice::shader::DynamicShader,
     dimensions: (u32, u32),
-    circle: graphics::mesh::VertexMesh<Position>,
+    circle: solstice::mesh::VertexMesh<Position>,
     vectors: line_buffer::LineBuffer,
     camera_position: nalgebra::Point2<f32>,
-    instances: graphics::mesh::MappedVertexMesh<Instance>,
+    instances: solstice::mesh::MappedVertexMesh<Instance>,
 }
 
 impl Renderer {
     pub fn new(
-        mut context: graphics::Context,
+        mut context: solstice::Context,
         width: u32,
         height: u32,
-    ) -> Result<Self, graphics::GraphicsError> {
+    ) -> Result<Self, solstice::GraphicsError> {
         let shader = {
             const SRC: &str = include_str!("shader.glsl");
-            let (vert, frag) = graphics::shader::DynamicShader::create_source(SRC, SRC);
-            graphics::shader::DynamicShader::new(&mut context, &vert, &frag)?
+            let (vert, frag) = solstice::shader::DynamicShader::create_source(SRC, SRC);
+            solstice::shader::DynamicShader::new(&mut context, &vert, &frag)?
         };
         let instanced_shader = {
             const SRC: &str = include_str!("instanced.glsl");
-            let (vert, frag) = graphics::shader::DynamicShader::create_source(SRC, SRC);
-            graphics::shader::DynamicShader::new(&mut context, &vert, &frag)?
+            let (vert, frag) = solstice::shader::DynamicShader::create_source(SRC, SRC);
+            solstice::shader::DynamicShader::new(&mut context, &vert, &frag)?
         };
 
         let dimensions = (width, height);
@@ -63,10 +63,10 @@ impl Renderer {
                 })
                 .collect::<Box<_>>();
 
-            graphics::mesh::VertexMesh::with_data(&mut context, &vertices)?
+            solstice::mesh::VertexMesh::with_data(&mut context, &vertices)?
         };
 
-        let instances = graphics::mesh::MappedVertexMesh::new(&mut context, 10000)?;
+        let instances = solstice::mesh::MappedVertexMesh::new(&mut context, 10000)?;
 
         let vectors = line_buffer::LineBuffer::new(&mut context)?;
 
@@ -121,37 +121,37 @@ impl Renderer {
             self.vectors.add(body);
         }
         let instances = self.instances.unmap(&mut self.context);
-        let attached = graphics::mesh::MeshAttacher::attach_with_step(&self.circle, instances, 1);
-        graphics::Renderer::draw(
+        let attached = solstice::mesh::MeshAttacher::attach_with_step(&self.circle, instances, 1);
+        solstice::Renderer::draw(
             &mut self.context,
             &self.instanced_shader,
-            &graphics::Geometry {
+            &solstice::Geometry {
                 mesh: attached,
                 draw_range: self.circle.draw_range(),
-                draw_mode: graphics::DrawMode::TriangleFan,
+                draw_mode: solstice::DrawMode::TriangleFan,
                 instance_count: state.simulation.bodies.len() as u32,
             },
-            graphics::PipelineSettings::default(),
+            solstice::PipelineSettings::default(),
         );
 
         self.context.use_shader(Some(&self.shader));
         self.context.set_uniform_by_location(
             &self.shader.get_uniform_by_name("uModel").unwrap().location,
-            &graphics::shader::RawUniformValue::Mat4(nalgebra::Matrix4::<f32>::identity().into()),
+            &solstice::shader::RawUniformValue::Mat4(nalgebra::Matrix4::<f32>::identity().into()),
         );
         let geometry = self.vectors.unmap(&mut self.context);
-        graphics::Renderer::draw(
+        solstice::Renderer::draw(
             &mut self.context,
             &self.shader,
             &geometry,
-            graphics::PipelineSettings::default(),
+            solstice::PipelineSettings::default(),
         )
     }
 }
 
 fn set_uniforms(
-    context: &mut graphics::Context,
-    shader: &graphics::shader::DynamicShader,
+    context: &mut solstice::Context,
+    shader: &solstice::shader::DynamicShader,
     dimensions: (u32, u32),
     camera_position: &nalgebra::Point2<f32>,
 ) {
@@ -159,7 +159,7 @@ fn set_uniforms(
     context.use_shader(Some(shader));
     context.set_uniform_by_location(
         &shader.get_uniform_by_name("uProjection").unwrap().location,
-        &graphics::shader::RawUniformValue::Mat4(
+        &solstice::shader::RawUniformValue::Mat4(
             nalgebra::geometry::Orthographic3::new(0., width as _, height as _, 0., 0., 100.)
                 .into_inner()
                 .into(),
@@ -167,11 +167,11 @@ fn set_uniforms(
     );
     context.set_uniform_by_location(
         &shader.get_uniform_by_name("uModel").unwrap().location,
-        &graphics::shader::RawUniformValue::Mat4(nalgebra::Matrix4::<f32>::identity().into()),
+        &solstice::shader::RawUniformValue::Mat4(nalgebra::Matrix4::<f32>::identity().into()),
     );
     context.set_uniform_by_location(
         &shader.get_uniform_by_name("uView").unwrap().location,
-        &graphics::shader::RawUniformValue::Mat4(
+        &solstice::shader::RawUniformValue::Mat4(
             nalgebra::Matrix4::new_translation(&nalgebra::Vector3::new(
                 -camera_position.x,
                 -camera_position.y,
@@ -182,7 +182,7 @@ fn set_uniforms(
     );
     context.set_uniform_by_location(
         &shader.get_uniform_by_name("uColor").unwrap().location,
-        &graphics::shader::RawUniformValue::Vec4([1., 1., 1., 1.].into()),
+        &solstice::shader::RawUniformValue::Vec4([1., 1., 1., 1.].into()),
     );
 }
 

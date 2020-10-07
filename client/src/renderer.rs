@@ -11,8 +11,8 @@ impl Renderer {
         width: u32,
         height: u32,
     ) -> Result<Renderer, JsValue> {
-        let glow_ctx = renderer::graphics::glow::Context::from_webgl1_context(ctx);
-        let context = renderer::graphics::Context::new(glow_ctx);
+        let glow_ctx = renderer::solstice::glow::Context::from_webgl1_context(ctx);
+        let context = renderer::solstice::Context::new(glow_ctx);
         let inner = renderer::Renderer::new(context, width, height)
             .map_err(|err| JsValue::from_str(&format!("{:?}", err)))?;
         Ok(Renderer(inner))

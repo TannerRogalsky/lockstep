@@ -22,9 +22,9 @@ fn main() {
     let window = unsafe { window.make_current().unwrap() };
 
     let glow_ctx = unsafe {
-        graphics::glow::Context::from_loader_function(|name| window.get_proc_address(name))
+        solstice::glow::Context::from_loader_function(|name| window.get_proc_address(name))
     };
-    let context = graphics::Context::new(glow_ctx);
+    let context = solstice::Context::new(glow_ctx);
     let size = window.window().inner_size();
     let mut renderer = renderer::Renderer::new(context, size.width, size.height).unwrap();
 
