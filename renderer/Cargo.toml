@@ -16,4 +16,3 @@ nalgebra = { version = "0.22", features = ["mint"] }
 [dev-dependencies]
 glutin = "0.24"
 rand = "0.7"
-rand_distr = "0.3"

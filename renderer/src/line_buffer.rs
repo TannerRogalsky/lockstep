@@ -16,7 +16,7 @@ pub struct LineBuffer {
 
 impl LineBuffer {
     pub fn new(context: &mut solstice::Context) -> Result<Self, solstice::GraphicsError> {
-        let inner = solstice::mesh::MappedVertexMesh::new(context, 1000)?;
+        let inner = solstice::mesh::MappedVertexMesh::new(context, super::MAX_PARTICLES * 4)?;
         Ok(Self { inner, offset: 0 })
     }
 

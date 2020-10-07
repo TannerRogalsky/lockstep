@@ -79,15 +79,14 @@ fn main() {
                         VirtualKeyCode::Down => mass = 10.max(mass / 10),
                         VirtualKeyCode::N => state.step(),
                         VirtualKeyCode::R => state.simulation.bodies.clear(),
-                        VirtualKeyCode::B => {
+                        VirtualKeyCode::P => {
                             let offset = renderer.camera_position();
-                            let x = rng.gen_range(offset.x, offset.x + size.width as f32);
-                            let y = rng.gen_range(offset.y, offset.y + size.height as f32);
-                            state.simulation.add_body(shared::nbody::Body::new_lossy(
-                                x,
-                                y,
-                                mass as f32,
-                            ));
+                            let origin = offset
+                                + nalgebra::Vector2::new(
+                                    mouse_position.x as f32,
+                                    mouse_position.y as f32,
+                                );
+                            proto_disk(&mut state.simulation, &mut rng, 1000, origin, 400.);
                         }
                         _ => {}
                     },
@@ -143,4 +142,26 @@ fn main() {
             _ => {}
         }
     });
+}
+
+fn proto_disk(
+    sim: &mut shared::nbody::Simulation,
+    rng: &mut rand::rngs::ThreadRng,
+    count: usize,
+    origin: nalgebra::Point2<f32>,
+    radius: f32,
+) {
+    use rand::prelude::*;
+    for _ in 0..count {
+        let rand = rng.gen::<f32>() * 2. * std::f32::consts::PI;
+        let rand2 = rng.gen::<f32>();
+        let x = (radius * rand2) * rand.cos();
+        let y = (radius * rand2) * rand.sin();
+        let mag = (x * x + y * y).sqrt();
+
+        let mut body = shared::nbody::Body::new_lossy(origin.x + x, origin.y + y, 1000.);
+        body.velocity.x = shared::nbody::Float::from_num(y * (mag / 7000.));
+        body.velocity.y = shared::nbody::Float::from_num(-x * (mag / 7000.));
+        sim.add_body(body);
+    }
 }

@@ -2,6 +2,8 @@ pub extern crate solstice;
 
 mod line_buffer;
 
+const MAX_PARTICLES: usize = 10_000;
+
 #[derive(solstice::vertex::Vertex)]
 #[repr(C)]
 struct Position {
@@ -66,7 +68,7 @@ impl Renderer {
             solstice::mesh::VertexMesh::with_data(&mut context, &vertices)?
         };
 
-        let instances = solstice::mesh::MappedVertexMesh::new(&mut context, 10000)?;
+        let instances = solstice::mesh::MappedVertexMesh::new(&mut context, MAX_PARTICLES)?;
 
         let vectors = line_buffer::LineBuffer::new(&mut context)?;
 
@@ -99,6 +101,10 @@ impl Renderer {
         self.camera_position = to_num_point(state.simulation.center_of_mass())
             - nalgebra::Vector2::new(width as f32 / 2., height as f32 / 2.);
 
+        if state.simulation.bodies.is_empty() {
+            return;
+        }
+
         for shader in &[&self.instanced_shader, &self.shader] {
             set_uniforms(
                 &mut self.context,
@@ -117,7 +123,6 @@ impl Renderer {
                 }],
                 index,
             );
-
             self.vectors.add(body);
         }
         let instances = self.instances.unmap(&mut self.context);
