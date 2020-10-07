@@ -58,8 +58,7 @@ fn main() {
     let mut mouse_position = glutin::dpi::PhysicalPosition::new(0., 0.);
     let mut mass = 10u32;
 
-    use rand::prelude::*;
-    let mut rng = thread_rng();
+    let mut rng = rand::thread_rng();
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -144,14 +143,13 @@ fn main() {
     });
 }
 
-fn proto_disk(
+fn proto_disk<R: rand::Rng>(
     sim: &mut shared::nbody::Simulation,
-    rng: &mut rand::rngs::ThreadRng,
+    rng: &mut R,
     count: usize,
     origin: nalgebra::Point2<f32>,
     radius: f32,
 ) {
-    use rand::prelude::*;
     for _ in 0..count {
         let rand = rng.gen::<f32>() * 2. * std::f32::consts::PI;
         let rand2 = rng.gen::<f32>();
