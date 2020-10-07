@@ -23,6 +23,7 @@ log = "0.4"
 [dev-dependencies]
 rand = "0.7"
 criterion = "0.3"
+rand_pcg = "0.2"
 
 [[bench]]
 name = "simulation"
