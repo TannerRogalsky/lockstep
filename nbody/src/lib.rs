@@ -22,6 +22,7 @@ pub struct Body {
     /// used for internal comparisons only. unique on a single client but not globally.
     #[serde(skip, default = "new_id")]
     id: usize,
+    collided: bool,
     pub position: Point2D,
     pub velocity: Vector2D,
     pub acceleration: Vector2D,
@@ -32,6 +33,7 @@ impl Body {
     pub fn new(x: Float, y: Float, mass: Float) -> Self {
         Self {
             id: new_id(),
+            collided: false,
             position: Point2D::new(x, y),
             velocity: Vector2D::new(Float::from_bits(0), Float::from_bits(0)),
             acceleration: Vector2D::new(Float::from_bits(0), Float::from_bits(0)),
@@ -143,48 +145,44 @@ impl Simulation {
     }
 
     pub fn step(&mut self) {
-        let mut collisions = std::collections::HashSet::new();
-        for body1 in self.bodies.iter() {
-            for body2 in self.bodies.iter() {
-                if !std::ptr::eq(body1, body2)
-                    && body1.collides_with(body2)
-                    && !collisions.contains(&(body2.id, body1.id))
-                {
-                    collisions.insert((body1.id, body2.id));
-                }
-            }
-        }
-
-        for (id1, id2) in collisions {
-            if let Some(body2_index) = self.bodies.iter().position(|body| body.id == id2) {
-                let body2 = self.bodies.swap_remove(body2_index);
-                if let Some(body1) = self.bodies.iter_mut().find(|body| body.id == id1) {
-                    body1.position = ((body1.position * body1.mass)
-                        + (body2.position * body2.mass).coords)
-                        / (body1.mass + body2.mass);
-                    body1.velocity = ((body1.velocity * body1.mass)
-                        + (body2.velocity * body2.mass))
-                        / (body1.mass + body2.mass);
-                    body1.mass += body2.mass;
-                } else {
-                    log::error!("Found only one side of a collision.")
-                }
-            }
-        }
-
-        // update accelerations
+        let mut new_bodies = Vec::new();
         for i in 0..self.bodies.len() {
-            self.bodies[i].acceleration = {
-                let body = &self.bodies[i];
-                let mut acc = Vector2D::new(Float::from_bits(0), Float::from_bits(0));
-                for other in self.bodies.iter() {
-                    if body.id != other.id {
-                        acc += body.force_from(other);
+            let mut acc = Vector2D::new(Float::from_bits(0), Float::from_bits(0));
+
+            for j in 0..self.bodies.len() {
+                let body1 = &self.bodies[i];
+                let body2 = &self.bodies[j];
+                if i != j && !body1.collided && !body2.collided {
+                    let diff = body2.position.coords - body1.position.coords;
+                    let mag = magnitude(diff);
+
+                    if mag < (body1.radius() + body2.radius()) {
+                        let sum_mass = body1.mass + body2.mass;
+                        let new_position = ((body1.position * body1.mass)
+                            + (body2.position * body2.mass).coords)
+                            / sum_mass;
+                        let new_velocity = ((body1.velocity * body1.mass)
+                            + (body2.velocity * body2.mass))
+                            / sum_mass;
+                        let mut new_body = Body::new(new_position.x, new_position.y, sum_mass);
+                        new_body.velocity = new_velocity;
+                        new_bodies.push(new_body);
+
+                        self.bodies[i].collided = true;
+                        self.bodies[j].collided = true;
                     }
+
+                    let gravity = Float::from_num(0.1);
+                    let accel = gravity * self.bodies[j].mass / (mag * mag);
+                    acc += (diff / mag) * accel;
                 }
-                acc
-            };
+            }
+
+            self.bodies[i].acceleration = acc;
         }
+
+        self.bodies.retain(|body| !body.collided);
+        self.bodies.extend(new_bodies.into_iter());
 
         // update velocities & positions
         for body in self.bodies.iter_mut() {
