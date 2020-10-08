@@ -30,26 +30,16 @@ fn main() {
 
     let mut state = shared::State::new();
 
-    state.simulation.add_body(shared::nbody::Body::new_lossy(
-        size.width as f32 / 2.,
-        size.height as f32 / 2.,
-        10000.,
-    ));
+    state
+        .simulation
+        .add_body(shared::nbody::Body::new_lossy(0., 0., 10000.));
     state.simulation.add_body({
-        let mut body = shared::nbody::Body::new_lossy(
-            size.width as f32 / 2.,
-            size.height as f32 / 2. - 100.,
-            10.,
-        );
+        let mut body = shared::nbody::Body::new_lossy(0., -100., 10.);
         body.velocity.x = shared::nbody::Float::from_num(3);
         body
     });
     state.simulation.add_body({
-        let mut body = shared::nbody::Body::new_lossy(
-            size.width as f32 / 2.,
-            size.height as f32 / 2. + 100.,
-            10.,
-        );
+        let mut body = shared::nbody::Body::new_lossy(0., 100., 10.);
         body.velocity.x = shared::nbody::Float::from_num(-3);
         body
     });
@@ -60,8 +50,18 @@ fn main() {
 
     let mut rng = rand::thread_rng();
 
+    let mut right_mouse_down = false;
+
     event_loop.run(move |event, _, control_flow| {
         match event {
+            Event::DeviceEvent { event, .. } => match event {
+                DeviceEvent::MouseMotion { delta: (x, y) } => {
+                    if right_mouse_down {
+                        renderer.move_camera(x as _, y as _);
+                    }
+                }
+                _ => {}
+            },
             Event::WindowEvent {
                 ref event,
                 window_id,
@@ -79,13 +79,15 @@ fn main() {
                         VirtualKeyCode::N => state.step(),
                         VirtualKeyCode::R => state.simulation.bodies.clear(),
                         VirtualKeyCode::P => {
-                            let offset = renderer.camera_position();
-                            let origin = offset
-                                + nalgebra::Vector2::new(
-                                    mouse_position.x as f32,
-                                    mouse_position.y as f32,
-                                );
-                            proto_disk(&mut state.simulation, &mut rng, 1000, origin, 400.);
+                            let (x, y) = renderer
+                                .screen_to_world(mouse_position.x as f32, mouse_position.y as f32);
+                            proto_disk(
+                                &mut state.simulation,
+                                &mut rng,
+                                1000,
+                                nalgebra::Point2::new(x, y),
+                                400.,
+                            );
                         }
                         _ => {}
                     },
@@ -101,12 +103,9 @@ fn main() {
                         mouse_down = Some(mouse_position);
                     }
                     (ElementState::Released, MouseButton::Left) => {
-                        let offset = renderer.camera_position();
-                        let mut body = shared::nbody::Body::new_lossy(
-                            offset.x + mouse_position.x as f32,
-                            offset.y + mouse_position.y as f32,
-                            mass as _,
-                        );
+                        let (x, y) = renderer
+                            .screen_to_world(mouse_position.x as f32, mouse_position.y as f32);
+                        let mut body = shared::nbody::Body::new_lossy(x, y, mass as _);
                         if let Some(mouse_down) = mouse_down {
                             const VEL_SCALE: f64 = 0.01;
                             let dx = (mouse_position.x - mouse_down.x) * VEL_SCALE;
@@ -117,7 +116,29 @@ fn main() {
                         state.simulation.add_body(body);
                         mouse_down = None;
                     }
+                    (ElementState::Pressed, MouseButton::Right) => {
+                        right_mouse_down = true;
+                    }
+                    (ElementState::Released, MouseButton::Right) => {
+                        right_mouse_down = false;
+                    }
                     _ => {}
+                },
+                WindowEvent::MouseWheel {
+                    delta,
+                    phase: _phase,
+                    ..
+                } => match delta {
+                    MouseScrollDelta::LineDelta(_x, y) => {
+                        if *y > 0. {
+                            renderer.zoom_in();
+                        } else {
+                            renderer.zoom_out();
+                        }
+                    }
+                    MouseScrollDelta::PixelDelta(glutin::dpi::LogicalPosition { x, y }) => {
+                        println!("pixel delta: {}, {}", x, y);
+                    }
                 },
                 WindowEvent::Resized(new_inner_size) => {
                     let glutin::dpi::PhysicalSize { width, height } = *new_inner_size;

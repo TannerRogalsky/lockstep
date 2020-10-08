@@ -29,8 +29,22 @@ impl Renderer {
     }
 
     #[wasm_bindgen]
-    pub fn transform_point(&self, x: f32, y: f32) -> Box<[f32]> {
-        let offset = self.0.camera_position();
-        Box::new([offset.x + x, offset.y + y])
+    pub fn move_camera(&mut self, dx: f32, dy: f32) {
+        self.0.move_camera(dx, dy)
+    }
+
+    #[wasm_bindgen]
+    pub fn zoom(&mut self, delta: f32) {
+        if delta < 0. {
+            self.0.zoom_in();
+        } else {
+            self.0.zoom_out();
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn screen_to_world(&self, x: f32, y: f32) -> Box<[f32]> {
+        let (x, y) = self.0.screen_to_world(x, y);
+        Box::new([x, y])
     }
 }

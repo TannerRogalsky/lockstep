@@ -74,7 +74,6 @@ impl AppState {
 
     pub fn step(&mut self) -> Result<(), watch::error::SendError<shared::State>> {
         while let Ok(input) = self.input_recver.try_recv() {
-            log::debug!("EVENT: {:?}", input.state);
             self.current.input_buffer.push(input);
         }
         self.current.step();

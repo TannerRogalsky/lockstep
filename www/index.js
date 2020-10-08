@@ -39,31 +39,41 @@ async function run() {
     event.preventDefault();
   });
 
-  let mouseDown = null;
+  let leftMouseDown = null;
+  let rightMouseDown = null;
   overlay.addEventListener('mousedown', (event) => {
-    if (event.button == 0) {
-      mouseDown = [event.x, event.y];
+    if (event.button === 0) {
+      leftMouseDown = [event.x, event.y];
+    } else if (event.button === 2) {
+      rightMouseDown = [event.x, event.y];
     }
+  });
+
+  overlay.addEventListener('wheel', (event) => {
+    renderer.zoom(event.deltaY);
   });
 
   let mousePos = [0, 0];
   overlay.addEventListener('mousemove', (event) => {
     mousePos[0] = event.x;
     mousePos[1] = event.y;
+
+    if (rightMouseDown) {
+      renderer.move_camera(event.x - rightMouseDown[0], event.y - rightMouseDown[1]);
+      rightMouseDown = [event.x, event.y];
+    }
   });
 
   let massOptions = document.getElementById("masses");
   overlay.addEventListener('mouseup', (event) => {
-    if (!mouseDown) {
-      return;
-    }
-
-    if (event.button == 0) {
+    if (event.button == 0 && leftMouseDown) {
       let mass = parseInt(massOptions.selectedOptions[0].value);
-      let down = renderer.transform_point(mouseDown[0], mouseDown[1]);
-      let up = renderer.transform_point(event.x, event.y);
+      let down = renderer.screen_to_world(leftMouseDown[0], leftMouseDown[1]);
+      let up = renderer.screen_to_world(event.x, event.y);
       state.mouse_click_event(down[0], down[1], mass, up[0], up[1]);
-      mouseDown = null;
+      leftMouseDown = null;
+    } else if (event.button == 2) {
+      rightMouseDown = null;
     }
   })
 
@@ -88,10 +98,10 @@ async function run() {
     overlay_ctx.fillText(`HASH FAIL: ${state.hash_failures()}`, 0, (++textIndex * fontSize));
     overlay_ctx.fillText(`BODIES: ${bodies.length}`, 0, (++textIndex * fontSize));
 
-    if (mouseDown) {
+    if (leftMouseDown) {
       overlay_ctx.strokeStyle = 'blue';
       overlay_ctx.beginPath();
-      overlay_ctx.moveTo(mouseDown[0], mouseDown[1]);
+      overlay_ctx.moveTo(leftMouseDown[0], leftMouseDown[1]);
       overlay_ctx.lineTo(mousePos[0], mousePos[1]);
       overlay_ctx.stroke();
     }
