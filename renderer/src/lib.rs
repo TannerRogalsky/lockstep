@@ -16,6 +16,10 @@ struct Instance {
     color: [f32; 4],
     offset: [f32; 2],
     scale: f32,
+
+#[derive(Default)]
+pub struct Options {
+    debug_vectors: bool,
 }
 
 pub struct Renderer {
@@ -28,6 +32,7 @@ pub struct Renderer {
     instances: solstice::mesh::MappedVertexMesh<Instance>,
     camera_position: nalgebra::Point2<f32>,
     zoom: i32,
+    options: Options,
 }
 
 impl Renderer {
@@ -79,6 +84,7 @@ impl Renderer {
             camera_position: nalgebra::Point2::new(0., 0.),
             instances,
             zoom: 0,
+            options: Default::default(),
         })
     }
 
@@ -156,7 +162,9 @@ impl Renderer {
                 }],
                 index,
             );
-            self.vectors.add(body);
+            if self.options.debug_vectors {
+                self.vectors.add(body);
+            }
         }
         let instances = self.instances.unmap(&mut self.context);
         let attached = solstice::mesh::MeshAttacher::attach_with_step(&self.circle, instances, 1);
@@ -172,18 +180,22 @@ impl Renderer {
             solstice::PipelineSettings::default(),
         );
 
-        self.context.use_shader(Some(&self.shader));
-        self.context.set_uniform_by_location(
-            &self.shader.get_uniform_by_name("uModel").unwrap().location,
-            &solstice::shader::RawUniformValue::Mat4(nalgebra::Matrix4::<f32>::identity().into()),
-        );
-        let geometry = self.vectors.unmap(&mut self.context);
-        solstice::Renderer::draw(
-            &mut self.context,
-            &self.shader,
-            &geometry,
-            solstice::PipelineSettings::default(),
-        )
+        if self.options.debug_vectors {
+            self.context.use_shader(Some(&self.shader));
+            self.context.set_uniform_by_location(
+                &self.shader.get_uniform_by_name("uModel").unwrap().location,
+                &solstice::shader::RawUniformValue::Mat4(
+                    nalgebra::Matrix4::<f32>::identity().into(),
+                ),
+            );
+            let geometry = self.vectors.unmap(&mut self.context);
+            solstice::Renderer::draw(
+                &mut self.context,
+                &self.shader,
+                &geometry,
+                solstice::PipelineSettings::default(),
+            )
+        }
     }
 }
 
