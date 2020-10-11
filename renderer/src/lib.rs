@@ -1,13 +1,22 @@
 pub extern crate solstice;
 
 mod line_buffer;
+mod sphere_geometry;
 
 const MAX_PARTICLES: usize = 10_000;
 
 #[derive(solstice::vertex::Vertex)]
 #[repr(C)]
-struct Position {
+struct Position2D {
     position: [f32; 2],
+}
+
+#[derive(solstice::vertex::Vertex)]
+#[repr(C)]
+pub struct Vertex3D {
+    position: [f32; 3],
+    normal: [f32; 3],
+    uv: [f32; 2],
 }
 
 #[derive(solstice::vertex::Vertex)]
@@ -16,6 +25,8 @@ struct Instance {
     color: [f32; 4],
     offset: [f32; 2],
     scale: f32,
+    angle: f32,
+}
 
 #[derive(Default)]
 pub struct Options {
@@ -27,7 +38,8 @@ pub struct Renderer {
     shader: solstice::shader::DynamicShader,
     instanced_shader: solstice::shader::DynamicShader,
     dimensions: (u32, u32),
-    circle: solstice::mesh::VertexMesh<Position>,
+    circle: solstice::mesh::VertexMesh<Position2D>,
+    sphere: solstice::mesh::IndexedMesh<Vertex3D, u16>,
     vectors: line_buffer::LineBuffer,
     instances: solstice::mesh::MappedVertexMesh<Instance>,
     camera_position: nalgebra::Point2<f32>,
@@ -63,11 +75,16 @@ impl Renderer {
 
                     let (x, y) = phi.sin_cos();
 
-                    Position { position: [x, y] }
+                    Position2D { position: [x, y] }
                 })
                 .collect::<Box<_>>();
 
             solstice::mesh::VertexMesh::with_data(&mut context, &vertices)?
+        };
+
+        let sphere = {
+            let (vertices, indices) = sphere_geometry::SphereGeometrySettings::default().build();
+            solstice::mesh::IndexedMesh::with_data(&mut context, &vertices, &indices)?
         };
 
         let instances = solstice::mesh::MappedVertexMesh::new(&mut context, MAX_PARTICLES)?;
@@ -80,6 +97,7 @@ impl Renderer {
             instanced_shader,
             dimensions,
             circle,
+            sphere,
             vectors,
             camera_position: nalgebra::Point2::new(0., 0.),
             instances,
@@ -154,11 +172,14 @@ impl Renderer {
         }
 
         for (index, body) in state.simulation.bodies.iter().enumerate() {
+            let x: f32 = body.position.x.to_num();
+            let y: f32 = body.position.y.to_num();
             self.instances.set_vertices(
                 &[Instance {
                     color: [1., 1., 1., 1.],
-                    offset: [body.position.x.to_num(), body.position.y.to_num()],
+                    offset: [x, y],
                     scale: body.radius().to_num(),
+                    angle: x.atan2(y),
                 }],
                 index,
             );
@@ -167,14 +188,14 @@ impl Renderer {
             }
         }
         let instances = self.instances.unmap(&mut self.context);
-        let attached = solstice::mesh::MeshAttacher::attach_with_step(&self.circle, instances, 1);
+        let attached = solstice::mesh::MeshAttacher::attach_with_step(&self.sphere, instances, 1);
         solstice::Renderer::draw(
             &mut self.context,
             &self.instanced_shader,
             &solstice::Geometry {
                 mesh: attached,
-                draw_range: self.circle.draw_range(),
-                draw_mode: solstice::DrawMode::TriangleFan,
+                draw_range: self.sphere.draw_range(),
+                draw_mode: solstice::DrawMode::Triangles,
                 instance_count: state.simulation.bodies.len() as u32,
             },
             solstice::PipelineSettings::default(),
