@@ -4,3 +4,4 @@ Cargo.lock
 /.idea
 /pkg
 /server/public
+/nbody/target

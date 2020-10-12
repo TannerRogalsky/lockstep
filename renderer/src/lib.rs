@@ -1,5 +1,6 @@
 pub extern crate solstice;
 
+mod grid;
 mod line_buffer;
 mod sphere_geometry;
 
@@ -44,6 +45,7 @@ pub struct Renderer {
     instances: solstice::mesh::MappedVertexMesh<Instance>,
     camera_position: nalgebra::Point2<f32>,
     zoom: i32,
+    grid: grid::Grid,
     options: Options,
 }
 
@@ -90,6 +92,16 @@ impl Renderer {
         let instances = solstice::mesh::MappedVertexMesh::new(&mut context, MAX_PARTICLES)?;
 
         let vectors = line_buffer::LineBuffer::new(&mut context)?;
+        let grid = grid::Grid::new(
+            nalgebra::Vector2::new(width as f32, height as f32),
+            &solstice::viewport::Viewport::new(
+                -(width as f32) / 2.,
+                -(height as f32) / 2.,
+                width as f32,
+                height as f32,
+            ),
+            &nalgebra::Vector2::new(width as f32 / 40., height as f32 / 40.),
+        );
 
         Ok(Self {
             context,
@@ -102,7 +114,10 @@ impl Renderer {
             camera_position: nalgebra::Point2::new(0., 0.),
             instances,
             zoom: 0,
-            options: Default::default(),
+            grid,
+            options: Options {
+                debug_vectors: true,
+            },
         })
     }
 
@@ -171,15 +186,38 @@ impl Renderer {
             );
         }
 
+        for body in state.simulation.bodies.iter() {
+            let x: f32 = body.position.x.to_num();
+            let y: f32 = body.position.y.to_num();
+            let force: f32 = body.mass.to_num();
+            let radius: f32 = body.radius().to_num();
+            self.grid.apply_explosive_force_2d(
+                force.ln(),
+                &nalgebra::Vector2::new(x, y),
+                radius * 2.,
+            );
+        }
+        self.grid.update();
+        self.grid.draw(&mut self.vectors);
+        let grid_geometry = self.vectors.unmap(&mut self.context);
+        solstice::Renderer::draw(
+            &mut self.context,
+            &self.shader,
+            &grid_geometry,
+            solstice::PipelineSettings::default(),
+        );
+
         for (index, body) in state.simulation.bodies.iter().enumerate() {
             let x: f32 = body.position.x.to_num();
             let y: f32 = body.position.y.to_num();
+            let vx: f32 = body.velocity.x.to_num();
+            let vy: f32 = body.velocity.y.to_num();
             self.instances.set_vertices(
                 &[Instance {
                     color: [1., 1., 1., 1.],
                     offset: [x, y],
                     scale: body.radius().to_num(),
-                    angle: x.atan2(y),
+                    angle: vy.atan2(vx),
                 }],
                 index,
             );

@@ -20,6 +20,22 @@ impl LineBuffer {
         Ok(Self { inner, offset: 0 })
     }
 
+    pub fn line(&mut self, start: [f32; 2], end: [f32; 2], color: [f32; 4]) {
+        let vertices = [
+            Vertex2D {
+                position: start,
+                color,
+            },
+            Vertex2D {
+                position: end,
+                color,
+            },
+        ];
+
+        self.inner.set_vertices(&vertices, self.offset);
+        self.offset += 2;
+    }
+
     pub fn add(&mut self, body: &shared::nbody::Body) {
         const VEC_SCALE: f32 = 100.;
         let origin = nalgebra::Point2::new(body.position.x.to_num(), body.position.y.to_num());
@@ -29,27 +45,12 @@ impl LineBuffer {
         let green = [0., 1., 0., 1.];
         let red = [1., 0., 0., 1.];
 
-        let vertices = [
-            Vertex2D {
-                position: [origin.x, origin.y],
-                color: green,
-            },
-            Vertex2D {
-                position: [accel.x, accel.y],
-                color: green,
-            },
-            Vertex2D {
-                position: [origin.x, origin.y],
-                color: red,
-            },
-            Vertex2D {
-                position: [vel.x, vel.y],
-                color: red,
-            },
-        ];
+        let origin = [origin.x, origin.y];
+        let accel = [accel.x, accel.y];
+        let vel = [vel.x, vel.y];
 
-        self.inner.set_vertices(&vertices, self.offset);
-        self.offset += 4;
+        self.line(origin, accel, green);
+        self.line(origin, vel, red);
     }
 
     pub fn unmap(
