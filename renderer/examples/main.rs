@@ -26,7 +26,16 @@ fn main() {
     };
     let context = solstice::Context::new(glow_ctx);
     let size = window.window().inner_size();
-    let mut renderer = renderer::Renderer::new(context, size.width, size.height).unwrap();
+    let resources = {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let resources = root.join("resources");
+        renderer::Resources {
+            shader_2d_src: &std::fs::read_to_string(resources.join("shader.glsl")).unwrap(),
+            body_shader_src: &std::fs::read_to_string(resources.join("instanced.glsl")).unwrap(),
+        }
+    };
+    let mut renderer =
+        renderer::Renderer::new(context, resources, size.width, size.height).unwrap();
 
     let mut state = shared::State::new();
 

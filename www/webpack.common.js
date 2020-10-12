@@ -35,7 +35,7 @@ module.exports = {
   plugins: [
     new CopyWebpackPlugin([
         'index.html',
-    //     {from: '../client/resources', to: 'resources'},
+        {from: path.resolve(__dirname, '..', 'renderer', 'resources'), to: 'public'},
     ]),    
     new WasmPackPlugin({
         crateDirectory: path.resolve(__dirname, '..', 'client'),

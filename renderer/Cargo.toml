@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 shared = { path = "../shared" }
 solstice = { version = "0.1", features = ["derive"] }
+#solstice = { version = "0.1", path = "../../solstice/solstice", features = ["derive"] }
 env_logger = "0.7"
 log = "0.4"
 nalgebra = { version = "0.22", features = ["mint"] }

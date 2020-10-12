@@ -1,4 +1,4 @@
-import { Connection, State, Renderer } from 'client';
+import { Connection, State, Renderer, RendererResources } from 'client';
 
 async function run() {
   const peer = new RTCPeerConnection({
@@ -16,10 +16,14 @@ async function run() {
     	.then((e) => new Uint8Array(e));
   const state = State.from_raw(state_buffer, channel);
 
+  const shader_2d = await fetch("public/shader.glsl").then(r => r.text());
+  const shader_instanced = await fetch("public/instanced.glsl").then(r => r.text());
+  const resources = new RendererResources(shader_2d, shader_instanced);
+
   const canvas = document.getElementById('canvas');
   const overlay = document.getElementById('overlay');
   const ctx = canvas.getContext('webgl');
-  const renderer = new Renderer(ctx, canvas.width, canvas.height);
+  const renderer = new Renderer(ctx, resources, canvas.width, canvas.height);
   const overlay_ctx = overlay.getContext('2d');
 
   const resize = (canvas) => {

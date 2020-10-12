@@ -207,6 +207,7 @@ impl Grid {
         }
     }
 
+    #[allow(unused)]
     pub fn apply_explosive_force_2d(&mut self, force: f32, position: &Vector2, radius: f32) {
         self.apply_explosive_force_3d(force, &Vector3::new(position.x, position.y, 0.), radius)
     }

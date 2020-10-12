@@ -41,16 +41,20 @@ impl LineBuffer {
         let origin = nalgebra::Point2::new(body.position.x.to_num(), body.position.y.to_num());
         let accel = origin + to_num_vec(body.acceleration) * VEC_SCALE;
         let vel = origin + to_num_vec(body.velocity) * VEC_SCALE;
+        let radius = origin + to_num_vec(body.velocity).normalize() * body.radius().to_num::<f32>();
 
         let green = [0., 1., 0., 1.];
         let red = [1., 0., 0., 1.];
+        let blue = [0., 0., 1., 1.];
 
         let origin = [origin.x, origin.y];
         let accel = [accel.x, accel.y];
         let vel = [vel.x, vel.y];
+        let radius = [radius.x, radius.y];
 
         self.line(origin, accel, green);
         self.line(origin, vel, red);
+        self.line(origin, radius, blue);
     }
 
     pub fn unmap(

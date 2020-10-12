@@ -1,6 +1,23 @@
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
+pub struct RendererResources {
+    shader_2d: String,
+    shader_instanced: String,
+}
+
+#[wasm_bindgen]
+impl RendererResources {
+    #[wasm_bindgen(constructor)]
+    pub fn new(shader_2d: String, shader_instanced: String) -> Self {
+        Self {
+            shader_2d,
+            shader_instanced
+        }
+    }
+}
+
+#[wasm_bindgen]
 pub struct Renderer(renderer::Renderer);
 
 #[wasm_bindgen]
@@ -8,12 +25,17 @@ impl Renderer {
     #[wasm_bindgen(constructor)]
     pub fn new(
         ctx: web_sys::WebGlRenderingContext,
+        resources: RendererResources,
         width: u32,
         height: u32,
     ) -> Result<Renderer, JsValue> {
         let glow_ctx = renderer::solstice::glow::Context::from_webgl1_context(ctx);
         let context = renderer::solstice::Context::new(glow_ctx);
-        let inner = renderer::Renderer::new(context, width, height)
+        let resources = renderer::Resources {
+            shader_2d_src: &resources.shader_2d,
+            body_shader_src: &resources.shader_instanced
+        };
+        let inner = renderer::Renderer::new(context, resources, width, height)
             .map_err(|err| JsValue::from_str(&format!("{:?}", err)))?;
         Ok(Renderer(inner))
     }

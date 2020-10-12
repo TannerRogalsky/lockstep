@@ -8,12 +8,6 @@ const MAX_PARTICLES: usize = 10_000;
 
 #[derive(solstice::vertex::Vertex)]
 #[repr(C)]
-struct Position2D {
-    position: [f32; 2],
-}
-
-#[derive(solstice::vertex::Vertex)]
-#[repr(C)]
 pub struct Vertex3D {
     position: [f32; 3],
     normal: [f32; 3],
@@ -32,6 +26,12 @@ struct Instance {
 #[derive(Default)]
 pub struct Options {
     debug_vectors: bool,
+    grid: bool,
+}
+
+pub struct Resources<'a> {
+    pub shader_2d_src: &'a str,
+    pub body_shader_src: &'a str,
 }
 
 pub struct Renderer {
@@ -39,7 +39,6 @@ pub struct Renderer {
     shader: solstice::shader::DynamicShader,
     instanced_shader: solstice::shader::DynamicShader,
     dimensions: (u32, u32),
-    circle: solstice::mesh::VertexMesh<Position2D>,
     sphere: solstice::mesh::IndexedMesh<Vertex3D, u16>,
     vectors: line_buffer::LineBuffer,
     instances: solstice::mesh::MappedVertexMesh<Instance>,
@@ -52,37 +51,26 @@ pub struct Renderer {
 impl Renderer {
     pub fn new(
         mut context: solstice::Context,
+        resources: Resources,
         width: u32,
         height: u32,
     ) -> Result<Self, solstice::GraphicsError> {
         let shader = {
-            const SRC: &str = include_str!("shader.glsl");
-            let (vert, frag) = solstice::shader::DynamicShader::create_source(SRC, SRC);
+            let (vert, frag) = solstice::shader::DynamicShader::create_source(
+                resources.shader_2d_src,
+                resources.shader_2d_src,
+            );
             solstice::shader::DynamicShader::new(&mut context, &vert, &frag)?
         };
         let instanced_shader = {
-            const SRC: &str = include_str!("instanced.glsl");
-            let (vert, frag) = solstice::shader::DynamicShader::create_source(SRC, SRC);
+            let (vert, frag) = solstice::shader::DynamicShader::create_source(
+                resources.body_shader_src,
+                resources.body_shader_src,
+            );
             solstice::shader::DynamicShader::new(&mut context, &vert, &frag)?
         };
 
         let dimensions = (width, height);
-
-        let circle = {
-            const POINTS: u32 = 50;
-            let vertices = (0..POINTS)
-                .map(|i| {
-                    let r = i as f32 / POINTS as f32;
-                    let phi = r * std::f32::consts::PI * 2.;
-
-                    let (x, y) = phi.sin_cos();
-
-                    Position2D { position: [x, y] }
-                })
-                .collect::<Box<_>>();
-
-            solstice::mesh::VertexMesh::with_data(&mut context, &vertices)?
-        };
 
         let sphere = {
             let (vertices, indices) = sphere_geometry::SphereGeometrySettings::default().build();
@@ -108,7 +96,6 @@ impl Renderer {
             shader,
             instanced_shader,
             dimensions,
-            circle,
             sphere,
             vectors,
             camera_position: nalgebra::Point2::new(0., 0.),
@@ -117,6 +104,7 @@ impl Renderer {
             grid,
             options: Options {
                 debug_vectors: true,
+                grid: false,
             },
         })
     }
@@ -186,26 +174,28 @@ impl Renderer {
             );
         }
 
-        for body in state.simulation.bodies.iter() {
-            let x: f32 = body.position.x.to_num();
-            let y: f32 = body.position.y.to_num();
-            let force: f32 = body.mass.to_num();
-            let radius: f32 = body.radius().to_num();
-            self.grid.apply_explosive_force_2d(
-                force.ln(),
-                &nalgebra::Vector2::new(x, y),
-                radius * 2.,
+        if self.options.grid {
+            for body in state.simulation.bodies.iter() {
+                let x: f32 = body.position.x.to_num();
+                let y: f32 = body.position.y.to_num();
+                let force: f32 = body.mass.to_num();
+                let radius: f32 = body.radius().to_num();
+                self.grid.apply_implosive_force_2d(
+                    force.ln(),
+                    &nalgebra::Vector2::new(x, y),
+                    radius * 2.,
+                );
+            }
+            self.grid.update();
+            self.grid.draw(&mut self.vectors);
+            let grid_geometry = self.vectors.unmap(&mut self.context);
+            solstice::Renderer::draw(
+                &mut self.context,
+                &self.shader,
+                &grid_geometry,
+                solstice::PipelineSettings::default(),
             );
         }
-        self.grid.update();
-        self.grid.draw(&mut self.vectors);
-        let grid_geometry = self.vectors.unmap(&mut self.context);
-        solstice::Renderer::draw(
-            &mut self.context,
-            &self.shader,
-            &grid_geometry,
-            solstice::PipelineSettings::default(),
-        );
 
         for (index, body) in state.simulation.bodies.iter().enumerate() {
             let x: f32 = body.position.x.to_num();
@@ -252,7 +242,10 @@ impl Renderer {
                 &mut self.context,
                 &self.shader,
                 &geometry,
-                solstice::PipelineSettings::default(),
+                solstice::PipelineSettings {
+                    depth_state: None,
+                    ..solstice::PipelineSettings::default()
+                },
             )
         }
     }
