@@ -145,7 +145,8 @@ async fn main() {
                 }
             }
 
-            let public = warp::fs::dir(std::path::Path::new("server").join("public"));
+            let public =
+                warp::fs::dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("public"));
             let rtc = warp::post()
                 .and(warp::path("new_rtc_session"))
                 .and(warp::body::stream())

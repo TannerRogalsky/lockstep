@@ -16,8 +16,8 @@ async function run() {
     	.then((e) => new Uint8Array(e));
   const state = State.from_raw(state_buffer, channel);
 
-  const shader_2d = await fetch("public/shader.glsl").then(r => r.text());
-  const shader_instanced = await fetch("public/instanced.glsl").then(r => r.text());
+  const shader_2d = await fetch("resources/shader.glsl").then(r => r.text());
+  const shader_instanced = await fetch("resources/instanced.glsl").then(r => r.text());
   const resources = new RendererResources(shader_2d, shader_instanced);
 
   const canvas = document.getElementById('canvas');

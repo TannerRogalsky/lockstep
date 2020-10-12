@@ -12,7 +12,7 @@ impl RendererResources {
     pub fn new(shader_2d: String, shader_instanced: String) -> Self {
         Self {
             shader_2d,
-            shader_instanced
+            shader_instanced,
         }
     }
 }
@@ -33,7 +33,7 @@ impl Renderer {
         let context = renderer::solstice::Context::new(glow_ctx);
         let resources = renderer::Resources {
             shader_2d_src: &resources.shader_2d,
-            body_shader_src: &resources.shader_instanced
+            body_shader_src: &resources.shader_instanced,
         };
         let inner = renderer::Renderer::new(context, resources, width, height)
             .map_err(|err| JsValue::from_str(&format!("{:?}", err)))?;
